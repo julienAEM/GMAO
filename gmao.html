@@ -143,6 +143,65 @@
       font-size: 0.9em;
     }
 
+    /* Amélioration de l'apparence des formulaires et éléments interactifs
+       pour un rendu plus professionnel.  Les formulaires utilisent
+       un fond légèrement translucide pour se distinguer du fond du
+       conteneur, et les champs de type fichier sont explicitement
+       stylés pour conserver un contraste élevé. */
+    form {
+      background-color: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--primary-color);
+    }
+    input[type="file"] {
+      background-color: var(--light-bg);
+      color: #000;
+    }
+
+    /* Personnalisation des cases à cocher pour les conditions afin
+       qu’elles ressemblent à des boutons sélectionnables.  Chaque
+       étiquette agit comme un bouton; lorsqu’un choix est coché,
+       l’arrière‑plan passe à la couleur d’accent et le texte reste
+       visible sur fond sombre. */
+    #special-conditions label,
+    #intervention-conditions label {
+      display: flex;
+      align-items: center;
+      background-color: var(--primary-color);
+      border: 1px solid var(--accent-color);
+      border-radius: 4px;
+      padding: 0.3em 0.6em;
+      color: var(--text-color);
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+    #special-conditions label input[type="checkbox"],
+    #intervention-conditions label input[type="checkbox"] {
+      margin-right: 0.3em;
+    }
+    #special-conditions label:hover,
+    #intervention-conditions label:hover {
+      background-color: var(--secondary-color);
+    }
+    #special-conditions input[type="checkbox"]:checked + span,
+    #intervention-conditions input[type="checkbox"]:checked + span {
+      color: var(--accent-color);
+      font-weight: bold;
+    }
+
+    /* Tableau avec lignes alternées pour une meilleure lisibilité */
+    table tbody tr:nth-child(even) {
+      background-color: var(--primary-color);
+    }
+    table tbody tr:nth-child(odd) {
+      background-color: var(--secondary-color);
+    }
+
+    /* Légère ombre portée sur les boutons pour les faire ressortir */
+    .btn {
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -231,6 +290,41 @@
       display: flex;
       gap: 0.5em;
     }
+
+    /*
+      Classes d'enveloppe pour donner aux sections un aspect professionnel
+      similaire aux formulaires de changement de quart. Chaque section est
+      encadrée dans un conteneur avec un en‑tête sombre, un trait
+      accentué et un contenu sur fond plus clair. Ces classes permettent
+      de reproduire la présentation soignée des pages "rapport de quart".
+    */
+    .page-wrapper {
+      max-width: 1200px;
+      margin: 2rem auto;
+      background: var(--secondary-color);
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    .page-header {
+      background: var(--primary-color);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      border-bottom: 3px solid var(--accent-color);
+    }
+    .page-header img {
+      height: 40px;
+      margin-right: 1rem;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      color: var(--text-color);
+    }
+    .page-content {
+      padding: 1.5rem;
+    }
   </style>
 </head>
 <body>
@@ -245,17 +339,30 @@
 
   <!-- Section Accueil avec tableau de bord KPI -->
   <section id="home" class="tab-content active">
-    <h1>Tableau de bord</h1>
-    <p>Bienvenue dans votre système GMAO. Utilisez les onglets pour créer et suivre les demandes de maintenance. Les indicateurs ci‑dessous reflètent l'état actuel.</p>
-    <div class="kpi-cards" id="kpiContainer">
-      <!-- KPI cards générées dynamiquement par JavaScript -->
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Tableau de bord</h1>
+      </div>
+      <div class="page-content">
+        <p>Bienvenue dans votre système GMAO. Utilisez les onglets pour créer et suivre les demandes de maintenance. Les indicateurs ci‑dessous reflètent l'état actuel.</p>
+        <div class="kpi-cards" id="kpiContainer">
+          <!-- KPI cards générées dynamiquement par JavaScript -->
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- Section Nouvelle Demande -->
   <section id="new" class="tab-content">
-    <h1>Nouvelle demande d'intervention</h1>
-    <form id="requestForm">
+    <!-- Enveloppe de présentation pour la section Nouvelle demande -->
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Nouvelle demande d'intervention</h1>
+      </div>
+      <div class="page-content">
+        <form id="requestForm">
       <!-- Numéro de demande généré automatiquement -->
       <div>
         <label>NO. demande</label>
@@ -330,21 +437,35 @@
       <div class="full-row" style="text-align: right;">
         <button type="submit" class="btn">Envoyer la demande</button>
       </div>
-    </form>
+        </form>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
   </section>
 
   <!-- Section Demandes en approbation -->
   <section id="approval" class="tab-content">
-    <h1>Demandes en approbation</h1>
-    <p>Les demandes en attente d'approbation apparaissent ci‑dessous. Cliquez sur une action pour mettre à jour la demande.</p>
-    <div id="approvalTableContainer"></div>
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Demandes en approbation</h1>
+      </div>
+      <div class="page-content">
+        <p>Les demandes en attente d'approbation apparaissent ci‑dessous. Cliquez sur une action pour mettre à jour la demande.</p>
+        <div id="approvalTableContainer"></div>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
   </section>
 
   <!-- Section Base de données -->
   <section id="database" class="tab-content">
-    <h1>Base de données</h1>
-    <p>Recherche avancée dans toutes les demandes. Utilisez les filtres pour affiner vos résultats.</p>
-    <form id="searchForm">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Base de données</h1>
+      </div>
+      <div class="page-content">
+        <p>Recherche avancée dans toutes les demandes. Utilisez les filtres pour affiner vos résultats.</p>
+        <form id="searchForm">
       <div>
         <label>Mot‑clé</label>
         <input type="text" id="search-keyword" placeholder="Recherche générale" />
@@ -384,14 +505,21 @@
         <button type="button" class="btn" onclick="performSearch()">Rechercher</button>
       </div>
     </form>
-    <div id="databaseResults"></div>
+        <div id="databaseResults"></div>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
   </section>
 
   <!-- Section Journal de travail -->
   <section id="worklog" class="tab-content">
-    <h1>Journal de travail</h1>
-    <p>Les techniciens peuvent saisir ici le compte‑rendu d’un bon de travail (BT) ou demande de travail (DT) à l’aide du numéro unique.</p>
-    <form id="worklogForm">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Journal de travail</h1>
+      </div>
+      <div class="page-content">
+        <p>Les techniciens peuvent saisir ici le compte‑rendu d’un bon de travail (BT) ou demande de travail (DT) à l’aide du numéro unique.</p>
+        <form id="worklogForm">
       <div>
         <label>Numéro de demande (BT/DT)</label>
         <input type="text" id="worklog-id" required />
@@ -418,21 +546,28 @@
       <div class="full-row" style="text-align: right;">
         <button type="submit" class="btn">Envoyer compte‑rendu</button>
       </div>
-    </form>
-    <div id="worklogMessage"></div>
+        </form>
+        <div id="worklogMessage"></div>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
   </section>
 
   <!-- Section Admin -->
   <section id="admin" class="tab-content">
-    <h1>Administration</h1>
-    <p>Gestion des valeurs des menus déroulants et configuration générale du système.</p>
-    <form id="adminForm">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Administration</h1>
+      </div>
+      <div class="page-content">
+        <p>Gestion des valeurs des menus déroulants et configuration générale du système.</p>
+        <form id="adminForm">
       <div class="full-row">
         <label>Départements (séparés par des virgules)</label>
         <input type="text" id="admin-departments" />
       </div>
       <div class="full-row">
-        <label>Zones (séparés par des virgules)</label>
+        <label>Zones (séparées par des virgules)</label>
         <input type="text" id="admin-zones" />
       </div>
       <div class="full-row">
@@ -442,8 +577,10 @@
       <div class="full-row" style="text-align: right;">
         <button type="button" class="btn" onclick="saveAdminSettings()">Enregistrer les paramètres</button>
       </div>
-    </form>
-    <p><small>Les modifications prennent effet immédiatement et sont stockées localement.</small></p>
+        </form>
+        <p><small>Les modifications prennent effet immédiatement et sont stockées localement.</small></p>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
   </section>
 
   <!-- Modale pour saisir des commentaires (manque d'information ou rejet) -->
@@ -486,7 +623,7 @@
       const defaultConfig = {
         departments: ['Mécanique','Électrique','Opération','Technique','Projet','Formation'],
         zones: ['Zone A','Zone B','Zone C','Zone D'],
-        priorities: ['Priorité 1 (urgent)','Priorité 2 (court terme)','Priorité 3 (\u00e0 planifier)','Priorité 4 (projet)'],
+        priorities: ['Priorité 1 (urgent)','Priorité 2 (court terme)','Priorité 3 (à planifier)','Priorité 4 (projet)'],
         specialConditions: ['Espace clos','Travail à chaud','Levage','Nacelle','Autres'],
         interventionConditions: ['En arrêt','En fonction','En shutdown','Autres']
       };
@@ -546,7 +683,9 @@
         input.type = 'checkbox'; input.value = cond;
         input.id = 'spec-' + cond;
         label.appendChild(input);
-        label.appendChild(document.createTextNode(' ' + cond));
+        const span = document.createElement('span');
+        span.textContent = ' ' + cond;
+        label.appendChild(span);
         specialContainer.appendChild(label);
       });
       const intervContainer = document.getElementById('intervention-conditions');
@@ -558,7 +697,9 @@
         input.type = 'checkbox'; input.value = cond;
         input.id = 'interv-' + cond;
         label.appendChild(input);
-        label.appendChild(document.createTextNode(' ' + cond));
+        const span = document.createElement('span');
+        span.textContent = ' ' + cond;
+        label.appendChild(span);
         intervContainer.appendChild(label);
       });
     }
@@ -661,7 +802,7 @@
         worklogs: []
       });
       saveRequests(requests);
-      alert('Demande envoyée avec succès !');
+      alert('Demande envoyée!');
       e.target.reset();
       document.getElementById('req-id').value = '';
       document.getElementById('req-date').focus();
