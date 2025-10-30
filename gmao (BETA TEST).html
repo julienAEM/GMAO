@@ -488,6 +488,8 @@
         <label>Ajouter des images ou plans</label>
         <!-- Fichiers multiples illimités -->
         <input type="file" id="req-images" accept="image/*" multiple />
+        <!-- Aperçu et suppression des pièces jointes sélectionnées -->
+        <div id="req-current-images" style="margin-top:0.5em;"></div>
       </div>
       <!-- Bouton envoyer -->
       <!-- Zone d'actions -->
@@ -869,6 +871,27 @@
       localStorage.setItem('gmaoConfig', JSON.stringify(config));
     }
 
+    // Variables globales pour la gestion des pièces jointes et du tri dans le planificateur
+    let newAttachments = [];
+    let plannerSortColumn = null;
+    let plannerSortAsc = true;
+
+    /**
+     * Trie la table de planification selon une colonne.  Lorsqu'on reclique sur
+     * la même colonne, l'ordre de tri est inversé.  Après modification de
+     * l'ordre de tri, la table est re‑générée.
+     * @param {string} column La clé du champ sur lequel trier (id, equipmentDesc, department, trade, priority, estimatedHours, scheduleDay).
+     */
+    function sortPlanner(column) {
+      if (plannerSortColumn === column) {
+        plannerSortAsc = !plannerSortAsc;
+      } else {
+        plannerSortColumn = column;
+        plannerSortAsc = true;
+      }
+      renderPlannerTable();
+    }
+
     /** Génère un identifiant unique basé sur la date et un compteur. */
     function generateUniqueId() {
       const prefix = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
@@ -1106,7 +1129,8 @@
     /** Convertit des fichiers image en Base64 pour stockage. */
     function processFiles(fileInput) {
       return new Promise(resolve => {
-        const files = Array.from(fileInput.files).slice(0, 5);
+        // Prend tous les fichiers sans limite et retourne un tableau d'objets {name, data}
+        const files = Array.from(fileInput.files);
         const promises = files.map(file => {
           return new Promise(res => {
             const reader = new FileReader();
@@ -1141,7 +1165,8 @@
       const interventionConditions = Array.from(document.querySelectorAll('#intervention-conditions input:checked')).map(i => i.value);
       const description = document.getElementById('req-description').value.trim();
       const descriptionLong = document.getElementById('longDescToggle').checked ? document.getElementById('req-description-long').value.trim() : '';
-      const images = await processFiles(document.getElementById('req-images'));
+      // Utiliser les pièces jointes sélectionnées et converties dans newAttachments
+      const images = newAttachments.slice();
       const requests = getRequests();
       requests.push({
         id,
@@ -1167,6 +1192,9 @@
       saveRequests(requests);
       alert('Demande envoyée avec succès !');
       e.target.reset();
+      // Réinitialiser la liste des pièces jointes sélectionnées et l'aperçu
+      newAttachments = [];
+      renderNewAttachments();
       // Réinitialiser date et heure après soumission
       const newToday = new Date();
       const todayStr = newToday.toISOString().split('T')[0];
@@ -1184,11 +1212,15 @@
       document.getElementById('req-id').value = '';
       document.getElementById('req-date').focus();
       updateKpi();
-      // Proposer l'impression ou l'envoi par email
-      if (confirm('Souhaitez-vous imprimer cette demande ?')) {
+      // Proposer l'impression ou l'envoi par email ou via Teams
+      if (confirm('Souhaitez-vous imprimer cette demande ?')) {
         printRequestById(id);
-      } else if (confirm('Souhaitez-vous envoyer cette demande par e-mail ?')) {
+      }
+      if (confirm('Souhaitez-vous envoyer cette demande par e‑mail ?')) {
         sendRequestByEmail(id);
+      }
+      if (confirm('Souhaitez-vous partager cette demande sur Teams ?')) {
+        sendRequestToTeams(id);
       }
     });
 
@@ -1696,6 +1728,57 @@
       });
     }
 
+    /**
+     * Gère la sélection de fichiers lors de la création d'une nouvelle demande.
+     * Chaque fichier est converti en Base64 et ajouté au tableau global newAttachments.
+     * Après traitement, l'entrée file est réinitialisée et la liste est rendue.
+     */
+    function handleNewImagesSelection(e) {
+      const files = Array.from(e.target.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          newAttachments.push({ name: file.name, data: reader.result });
+          renderNewAttachments();
+        };
+        reader.readAsDataURL(file);
+      });
+      // Réinitialiser le champ pour pouvoir sélectionner à nouveau les mêmes fichiers
+      e.target.value = '';
+    }
+
+    /**
+     * Affiche la liste des pièces jointes sélectionnées pour une nouvelle demande.
+     * Chaque ligne montre le nom du fichier et un bouton pour retirer cet élément.
+     */
+    function renderNewAttachments() {
+      const container = document.getElementById('req-current-images');
+      if (!container) return;
+      container.innerHTML = '';
+      newAttachments.forEach((img, index) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
+        row.style.backgroundColor = 'rgba(255,255,255,0.05)';
+        row.style.padding = '0.4em 0.6em';
+        row.style.marginBottom = '0.2em';
+        row.style.borderRadius = '4px';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = img.name;
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Supprimer';
+        delBtn.className = 'btn small';
+        delBtn.onclick = () => {
+          newAttachments.splice(index, 1);
+          renderNewAttachments();
+        };
+        row.appendChild(nameSpan);
+        row.appendChild(delBtn);
+        container.appendChild(row);
+      });
+    }
+
     /** Imprime un bon de travail en format PDF/print. */
     function printRequest() {
       const id = editState.currentId;
@@ -1804,6 +1887,37 @@
       window.open(mailto, '_blank');
     }
 
+    /**
+     * Copie les détails d'une demande dans le presse‑papiers afin de les partager facilement
+     * dans Microsoft Teams.  Une fois les informations copiées, un message demande à
+     * l'utilisateur de coller ces informations dans une conversation Teams.
+     */
+    function sendRequestToTeams(id) {
+      const req = getRequests().find(r => r.id === id);
+      if (!req) return;
+      let text = 'Demande #' + req.id + '\n';
+      text += 'Date: ' + req.date + '\n';
+      text += 'Heure: ' + (req.time || '') + '\n';
+      text += 'Demandeur: ' + req.demandeur + '\n';
+      text += 'Département: ' + req.department + '\n';
+      text += 'Zone: ' + req.zone + '\n';
+      text += 'Équipement/Service: ' + (req.equipmentDesc || '') + '\n';
+      text += 'NO. Équipement: ' + (req.equipmentNumber || '') + '\n';
+      text += 'Priorité: ' + req.priority + '\n';
+      text += 'Description: ' + req.description + '\n';
+      if (req.descriptionLong) text += 'Description longue: ' + req.descriptionLong + '\n';
+      // Copie dans le presse‑papiers
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+          alert('Les détails de la demande ont été copiés. Ouvrez Teams et collez‑les dans votre conversation.');
+        }).catch(() => {
+          alert('Échec de la copie dans le presse‑papiers. Veuillez copier manuellement.\n\n' + text);
+        });
+      } else {
+        alert('Copiez ces informations pour les partager dans Teams:\n\n' + text);
+      }
+    }
+
     /* -------------------------------------------------------------------- */
     /* Fonctions pour la planification hebdomadaire                       */
     /* -------------------------------------------------------------------- */
@@ -1823,6 +1937,23 @@ function renderPlannerTable() {
                  (r.trade && r.trade.toLowerCase().includes(term));
         });
       }
+      // Trier les demandes selon la colonne sélectionnée
+      if (plannerSortColumn) {
+        requests.sort((a, b) => {
+          let valA = a[plannerSortColumn];
+          let valB = b[plannerSortColumn];
+          // Normaliser les valeurs undefined
+          if (valA === undefined || valA === null) valA = '';
+          if (valB === undefined || valB === null) valB = '';
+          // Convertir en minuscules pour les chaînes
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+          if (valA < valB) return plannerSortAsc ? -1 : 1;
+          if (valA > valB) return plannerSortAsc ? 1 : -1;
+          return 0;
+        });
+      }
+
       if (requests.length === 0) {
         container.innerHTML = '<p>Aucune demande à planifier.</p>';
         return;
@@ -1831,8 +1962,25 @@ function renderPlannerTable() {
       const table = document.createElement('table');
       const thead = document.createElement('thead');
       const headerRow = document.createElement('tr');
-      ['ID','Description','Département','Métier','Priorité','Heures prévues','Jour','Modifier'].forEach(h => {
-        const th = document.createElement('th'); th.textContent = h; headerRow.appendChild(th);
+      // En‑têtes cliquables pour le tri
+      const headers = [
+        { label: 'ID', key: 'id' },
+        { label: 'Description', key: 'equipmentDesc' },
+        { label: 'Département', key: 'department' },
+        { label: 'Métier', key: 'trade' },
+        { label: 'Priorité', key: 'priority' },
+        { label: 'Heures prévues', key: 'estimatedHours' },
+        { label: 'Jour', key: 'scheduleDay' },
+        { label: 'Modifier', key: null }
+      ];
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h.label;
+        if (h.key) {
+          th.style.cursor = 'pointer';
+          th.onclick = () => sortPlanner(h.key);
+        }
+        headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
       const tbody = document.createElement('tbody');
@@ -1941,6 +2089,12 @@ function exportPlannerCSV() {
         const hours = now.getHours().toString().padStart(2, '0');
         const minutes = now.getMinutes().toString().padStart(2, '0');
         reqTime.value = `${hours}:${minutes}`;
+      }
+
+      // Écouter la sélection de pièces jointes pour la nouvelle demande et gérer l'aperçu
+      const reqImagesInput = document.getElementById('req-images');
+      if (reqImagesInput) {
+        reqImagesInput.addEventListener('change', handleNewImagesSelection);
       }
       // Toggle de description longue pour le formulaire d'édition
       const editLongToggle = document.getElementById('edit-longDescToggle');
