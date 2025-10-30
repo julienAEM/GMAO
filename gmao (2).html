@@ -1,0 +1,1956 @@
+<!--
+  GMAO (Gestion de Maintenance Assistée par Ordinateur) – Application web
+
+  Cette page est une application autonome permettant de gérer des demandes d'intervention
+  et de suivre l’avancement des travaux. Elle adopte le style des fichiers existants
+  dans le dépôt (palette de couleurs bleu foncé et accent bleu clair) et fonctionne sans
+  serveur en utilisant le stockage local (localStorage) pour sauvegarder les données
+  jusqu’à ce qu’un serveur backend soit disponible.  Le code est commenté en français
+  pour en faciliter l’adaptation.  Les sections principales sont :
+    • Accueil : tableau de bord et indicateurs (KPI)
+    • Nouvelle demande : formulaire pour créer une demande unique
+    • Demandes en approbation : liste des demandes en attente avec actions
+    • Base de données : recherche et filtrage de toutes les demandes
+    • Journal de travail : saisie des comptes‑rendus par les corps de métier
+    • Admin : gestion des listes déroulantes et paramètres
+
+  Cette version utilise uniquement du HTML, CSS et JavaScript. Toutes les données
+  sont enregistrées dans localStorage sous la clé "gmaoRequests" (tableau d’objets)
+  et "gmaoConfig" (paramètres).  Lorsqu’un serveur sera disponible, ces appels
+  pourront être remplacés par des requêtes API.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GMAO – Gestion des demandes de maintenance</title>
+  <style>
+    /*
+      Variables de couleur pour s’aligner sur le thème existant
+      (bleu foncé, bleu moyen et bleu clair).  La couleur principale sert
+      de fond; la couleur secondaire pour les en‑têtes et l’accent pour
+      les boutons et éléments interactifs.  Le texte est blanc pour un
+      contraste élevé.
+    */
+    :root {
+      --primary-color: #253746;
+      --secondary-color: #324e67;
+      --accent-color: #0078c8;
+      --text-color: #ffffff;
+      --light-bg: #f5f5f5;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--primary-color);
+      color: var(--text-color);
+      overflow-y: scroll;
+    }
+
+    h1, h2, h3 {
+      margin: 0.5em 0;
+      color: var(--accent-color);
+    }
+
+    /* Barre de navigation horizontale en haut de la page.  Chaque onglet
+       est un bouton qui appelle showTab() pour afficher la section
+       correspondante.  Les onglets actifs sont soulignés. */
+    nav {
+      display: flex;
+      background-color: var(--secondary-color);
+      border-bottom: 2px solid var(--accent-color);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    nav button {
+      flex: 1;
+      padding: 1em;
+      background: none;
+      border: none;
+      color: var(--text-color);
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    nav button:hover {
+      background-color: var(--primary-color);
+    }
+    nav button.active {
+      border-bottom: 3px solid var(--accent-color);
+      color: var(--accent-color);
+    }
+
+    /* Conteneur pour les pages; chaque section occupe toute la largeur et
+       est cachée par défaut sauf celle qui est active. */
+    .tab-content {
+      display: none;
+      padding: 1em 2em;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Style général des formulaires et tableaux */
+    form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1em;
+      margin-bottom: 1em;
+      background-color: var(--secondary-color);
+      padding: 1em;
+      border-radius: 8px;
+    }
+    form label {
+      margin-bottom: 0.2em;
+      color: var(--accent-color);
+      font-weight: bold;
+    }
+    form input, form select, form textarea {
+      width: 100%;
+      padding: 0.5em;
+      border: 1px solid var(--accent-color);
+      border-radius: 4px;
+      background-color: var(--light-bg);
+      color: #000;
+      box-sizing: border-box;
+    }
+    form textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    form .full-row {
+      grid-column: 1 / -1;
+    }
+    .btn {
+      padding: 0.6em 1.2em;
+      background-color: var(--accent-color);
+      border: none;
+      color: var(--text-color);
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      text-align: center;
+      transition: background-color 0.3s ease;
+    }
+    .btn:hover {
+      background-color: #005a99;
+    }
+    .btn.small {
+      padding: 0.4em 0.8em;
+      font-size: 0.9em;
+    }
+
+    /* Ligne de boutons avec espacement cohérent pour les actions
+       dans les formulaires.  Les boutons sont alignés sur la même
+       ligne et séparés par un petit espace pour une présentation
+       professionnelle. */
+    .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5em;
+      margin-top: 1em;
+    }
+
+    /* Amélioration de l'apparence des formulaires et éléments interactifs
+       pour un rendu plus professionnel.  Les formulaires utilisent
+       un fond légèrement translucide pour se distinguer du fond du
+       conteneur, et les champs de type fichier sont explicitement
+       stylés pour conserver un contraste élevé. */
+    form {
+      background-color: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--primary-color);
+    }
+    input[type="file"] {
+      background-color: var(--light-bg);
+      color: #000;
+    }
+
+    /* Personnalisation des cases à cocher pour les conditions afin
+       qu’elles ressemblent à des boutons sélectionnables.  Chaque
+       étiquette agit comme un bouton; lorsqu’un choix est coché,
+       l’arrière‑plan passe à la couleur d’accent et le texte reste
+       visible sur fond sombre. */
+    #special-conditions label,
+    #intervention-conditions label {
+      display: flex;
+      align-items: center;
+      background-color: var(--primary-color);
+      border: 1px solid var(--accent-color);
+      border-radius: 4px;
+      padding: 0.3em 0.6em;
+      color: var(--text-color);
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+    #special-conditions label input[type="checkbox"],
+    #intervention-conditions label input[type="checkbox"] {
+      margin-right: 0.3em;
+    }
+    #special-conditions label:hover,
+    #intervention-conditions label:hover {
+      background-color: var(--secondary-color);
+    }
+    #special-conditions input[type="checkbox"]:checked + span,
+    #intervention-conditions input[type="checkbox"]:checked + span {
+      color: var(--accent-color);
+      font-weight: bold;
+    }
+
+    /* Ajout d'un espacement entre les boutons d'action pour améliorer la lisibilité */
+    .full-row button + button {
+      margin-left: 0.5em;
+    }
+
+    /* Tableau avec lignes alternées pour une meilleure lisibilité */
+    table tbody tr:nth-child(even) {
+      background-color: var(--primary-color);
+    }
+    table tbody tr:nth-child(odd) {
+      background-color: var(--secondary-color);
+    }
+
+    /* Légère ombre portée sur les boutons pour les faire ressortir */
+    .btn {
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1em 0;
+      background-color: var(--secondary-color);
+      border: 1px solid var(--accent-color);
+    }
+    table thead {
+      background-color: var(--primary-color);
+    }
+    table th, table td {
+      padding: 0.5em;
+      border: 1px solid var(--accent-color);
+      text-align: left;
+      color: var(--text-color);
+    }
+    table th {
+      color: var(--accent-color);
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 0.3em 0.6em;
+      border-radius: 12px;
+      color: var(--text-color);
+      font-size: 0.8em;
+      margin-right: 0.3em;
+    }
+    .status-en-attente { background-color: #9b59b6; }
+    .status-approuvee { background-color: #27ae60; }
+    .status-manque-info { background-color: #e67e22; }
+    .status-en-attente-pieces { background-color: #d35400; }
+    .status-a-ceduler { background-color: #f1c40f; color:#000; }
+    .status-rejete { background-color: #c0392b; }
+    .status-terminee { background-color: #2980b9; }
+
+    /* Section KPI sous forme de cartes */
+    .kpi-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1em;
+    }
+    .kpi-card {
+      flex: 1 1 200px;
+      background-color: var(--secondary-color);
+      border: 1px solid var(--accent-color);
+      border-radius: 6px;
+      padding: 1em;
+      text-align: center;
+    }
+    .kpi-card h3 {
+      margin: 0.2em 0;
+      font-size: 1.1em;
+      color: var(--accent-color);
+    }
+    .kpi-card p {
+      margin: 0;
+      font-size: 1.8em;
+      font-weight: bold;
+    }
+
+    /* Boîte modale pour messages (manque d'information et rejet) */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .modal-content {
+      background: var(--secondary-color);
+      padding: 1em;
+      border-radius: 6px;
+      width: 90%;
+      max-width: 500px;
+    }
+    .modal-content h3 {
+      margin-top: 0;
+    }
+
+    .flex-row {
+      display: flex;
+      gap: 0.5em;
+    }
+
+    /*
+      Classes d'enveloppe pour donner aux sections un aspect professionnel
+      similaire aux formulaires de changement de quart. Chaque section est
+      encadrée dans un conteneur avec un en‑tête sombre, un trait
+      accentué et un contenu sur fond plus clair. Ces classes permettent
+      de reproduire la présentation soignée des pages "rapport de quart".
+    */
+    .page-wrapper {
+      max-width: 1200px;
+      margin: 2rem auto;
+      background: var(--secondary-color);
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    .page-header {
+      background: var(--primary-color);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      border-bottom: 3px solid var(--accent-color);
+    }
+    .page-header img {
+      height: 40px;
+      margin-right: 1rem;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      color: var(--text-color);
+    }
+    .page-content {
+      padding: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Page de connexion, affichée avant que l'utilisateur ne se connecte. -->
+  <!-- Le conteneur de connexion est visible par défaut; il sera masqué après connexion via checkSession() -->
+  <div id="login-container" style="display:block;">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <h1>Connexion GMAO</h1>
+      </div>
+      <div class="page-content">
+        <form onsubmit="event.preventDefault(); login();" style="max-width:400px;margin:auto;">
+          <label>Nom d'utilisateur :</label>
+          <input type="text" id="login-user" required />
+          <label>Mot de passe :</label>
+          <input type="password" id="login-pass" required />
+          <button type="submit" class="btn" style="margin-top:1em;">Se connecter</button>
+          <p id="login-error" style="color:#e74c3c;margin-top:0.5em;"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+  <nav style="display:none;">
+    <!-- Chaque bouton possède un attribut data-roles indiquant les rôles autorisés. -->
+    <button id="tab-home" class="active" data-roles="all" onclick="showTab('home')">Accueil</button>
+    <button id="tab-new" data-roles="all" onclick="showTab('new')">Nouvelle demande</button>
+    <button id="tab-approval" data-roles="admin,planificateur" onclick="showTab('approval')">Demandes en approbation</button>
+    <button id="tab-edit" data-roles="admin,planificateur,Mécanicien,Électricien,Opération,Technique,Autre" onclick="showTab('edit')">Modification de demande</button>
+    <button id="tab-planner" data-roles="admin,planificateur" onclick="showTab('planner')">Planificateur</button>
+    <button id="tab-backlogs" data-roles="all" onclick="showTab('backlogs')">Backlogs</button>
+    <button id="tab-worklog" data-roles="all" onclick="showTab('worklog')">Journal de travail</button>
+    <button id="tab-admin" data-roles="admin" onclick="showTab('admin')">Admin</button>
+    <!-- Bouton de déconnexion, affiché uniquement lorsque l'utilisateur est connecté -->
+    <button id="logout-btn" data-roles="all" style="display:none;" onclick="logout()">Déconnexion</button>
+  </nav>
+
+  <!-- Section Accueil avec tableau de bord KPI -->
+  <section id="home" class="tab-content active">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Tableau de bord</h1>
+      </div>
+      <div class="page-content">
+        <p>Bienvenue dans votre système GMAO. Utilisez les onglets pour créer et suivre les demandes de maintenance. Les indicateurs ci‑dessous reflètent l'état actuel.</p>
+        <div class="kpi-cards" id="kpiContainer">
+          <!-- KPI cards générées dynamiquement par JavaScript -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section Nouvelle Demande -->
+  <section id="new" class="tab-content">
+    <!-- Enveloppe de présentation pour la section Nouvelle demande -->
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Nouvelle demande d'intervention</h1>
+      </div>
+      <div class="page-content">
+        <form id="requestForm">
+      <!-- Numéro de demande généré automatiquement -->
+      <div>
+        <label>NO. demande</label>
+        <input type="text" id="req-id" readonly placeholder="Attribution automatique" />
+      </div>
+      <!-- Date -->
+      <div>
+        <label>Date</label>
+        <input type="date" id="req-date" required />
+      </div>
+      <!-- Heure -->
+      <div>
+        <label>Heure</label>
+        <input type="time" id="req-time" required />
+      </div>
+      <!-- Demandeur -->
+      <div>
+        <label>Demandeur</label>
+        <input type="text" id="req-demandeur" required />
+      </div>
+      <!-- Département -->
+      <div>
+        <label>Département concerné</label>
+        <select id="req-department" required></select>
+      </div>
+      <!-- Zone -->
+      <div>
+        <label>Zone</label>
+        <select id="req-zone" required></select>
+      </div>
+      <!-- Corps de métier -->
+      <div>
+        <label>Corps de métier</label>
+        <select id="req-trade" required></select>
+      </div>
+      <!-- Durée estimée (heures) -->
+      <div>
+        <label>Durée estimée (heures)</label>
+        <input type="number" id="req-hours" min="0" step="0.1" placeholder="Heures prévues" />
+      </div>
+      <!-- Équipement ou service -->
+      <div class="full-row">
+        <label>Équipement ou Service (description)</label>
+        <input type="text" id="req-equipment-desc" placeholder="Description de l'équipement" />
+      </div>
+      <!-- NO. Équipement -->
+      <div>
+        <label>NO. Équipement</label>
+        <input type="text" id="req-equipment-number" placeholder="Numéro de l'équipement" />
+      </div>
+      <!-- Priorisation -->
+      <div>
+        <label>Priorisation sommaire</label>
+        <select id="req-priority" required></select>
+      </div>
+      <!-- Condition spéciale -->
+      <div class="full-row">
+        <label>Condition spéciale</label>
+        <div class="flex-row" id="special-conditions">
+          <!-- boutons générés via JS -->
+        </div>
+      </div>
+      <!-- Condition d'intervention -->
+      <div class="full-row">
+        <label>Condition d'intervention</label>
+        <div class="flex-row" id="intervention-conditions">
+          <!-- boutons générés via JS -->
+        </div>
+      </div>
+      <!-- Description courte -->
+      <div class="full-row">
+        <label>Description (250 caractères max)</label>
+        <textarea id="req-description" maxlength="250" placeholder="Description concise"></textarea>
+      </div>
+      <!-- Bouton pour description longue -->
+      <div class="full-row">
+        <input type="checkbox" id="longDescToggle" />
+        <label for="longDescToggle">Description plus longue (500 caractères)</label>
+        <textarea id="req-description-long" maxlength="500" placeholder="Description détaillée (optionnelle)" style="display:none;"></textarea>
+      </div>
+      <!-- Ajout d'images ou plans -->
+      <div class="full-row">
+        <label>Ajouter des images ou plans</label>
+        <!-- Fichiers multiples illimités -->
+        <input type="file" id="req-images" accept="image/*" multiple />
+      </div>
+      <!-- Bouton envoyer -->
+      <!-- Zone d'actions -->
+      <div class="full-row btn-row">
+        <button type="submit" class="btn">Envoyer la demande</button>
+      </div>
+        </form>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
+  </section>
+
+  <!-- Section Demandes en approbation -->
+  <section id="approval" class="tab-content">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Demandes en approbation</h1>
+      </div>
+      <div class="page-content">
+        <p>Les demandes en attente d'approbation apparaissent ci‑dessous. Cliquez sur une action pour mettre à jour la demande.</p>
+        <div id="approvalTableContainer"></div>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
+  </section>
+
+  <!-- Section Backlogs -->
+  <section id="backlogs" class="tab-content">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Backlogs</h1>
+      </div>
+      <div class="page-content">
+        <p>Recherche avancée dans toutes les demandes. Utilisez les filtres pour affiner vos résultats.</p>
+        <form id="searchForm">
+      <div>
+        <label>NO. demande</label>
+        <input type="text" id="search-id" placeholder="Numéro de demande" />
+      </div>
+      <div>
+        <label>Mot‑clé</label>
+        <input type="text" id="search-keyword" placeholder="Recherche générale" />
+      </div>
+      <div>
+        <label>Demandeur</label>
+        <input type="text" id="search-demandeur" placeholder="Nom du demandeur" />
+      </div>
+      <div>
+        <label>Date début</label>
+        <input type="date" id="search-date-start" />
+      </div>
+      <div>
+        <label>Date fin</label>
+        <input type="date" id="search-date-end" />
+      </div>
+      <div>
+        <label>Département</label>
+        <select id="search-department">
+          <option value="">Tous</option>
+        </select>
+      </div>
+      <div>
+        <label>Zone</label>
+        <select id="search-zone">
+          <option value="">Toutes</option>
+        </select>
+      </div>
+      <div>
+        <label>NO. Équipement</label>
+        <input type="text" id="search-equipment" placeholder="Numéro équipement" />
+      </div>
+      <div>
+        <label>Corps de métier</label>
+        <select id="search-trade">
+          <option value="">Tous</option>
+        </select>
+      </div>
+      <div>
+        <label>Priorité</label>
+        <select id="search-priority">
+          <option value="">Toutes</option>
+        </select>
+      </div>
+      <div>
+        <label>Statut</label>
+        <select id="search-status">
+          <option value="">Tous</option>
+          <option value="en-attente">En attente</option>
+          <option value="approuvee">Approuvée</option>
+          <option value="manque-info">Manque info</option>
+          <option value="en-attente-pieces">En attente pièces</option>
+          <option value="a-ceduler">À cédule</option>
+          <option value="rejete">Rejetée</option>
+          <option value="terminee">Terminée</option>
+        </select>
+      </div>
+      <div class="full-row" style="text-align: right;">
+        <button type="button" class="btn" onclick="performSearch()">Rechercher</button>
+      </div>
+    </form>
+        <div id="backlogsResults"></div>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
+  </section>
+
+  <!-- Section Journal de travail -->
+  <section id="worklog" class="tab-content">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Journal de travail</h1>
+      </div>
+      <div class="page-content">
+        <p>Les techniciens peuvent saisir ici le compte‑rendu d’un bon de travail (BT) ou demande de travail (DT) à l’aide du numéro unique.</p>
+        <form id="worklogForm">
+      <div>
+        <label>Numéro de demande (BT/DT)</label>
+        <input type="text" id="worklog-id" required />
+      </div>
+      <div>
+        <label>Statut du travail</label>
+        <select id="worklog-status" required>
+          <option value="terminee">Complété</option>
+          <option value="annulee">Annulé</option>
+          <option value="reportee">À reporter</option>
+          <option value="manque-pieces">Pas terminé (manque pièces)</option>
+          <option value="a-continuer">À continuer</option>
+          <option value="autre">Autres</option>
+        </select>
+      </div>
+      <div class="full-row">
+        <label>Description du travail effectué</label>
+        <textarea id="worklog-description" maxlength="500" placeholder="Détails du travail"></textarea>
+      </div>
+      <div class="full-row">
+        <label>Ajouter des images supplémentaires</label>
+        <input type="file" id="worklog-images" accept="image/*" multiple />
+      </div>
+      <div class="full-row" style="text-align: right;">
+        <button type="submit" class="btn">Envoyer compte‑rendu</button>
+      </div>
+        </form>
+        <div id="worklogMessage"></div>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
+  </section>
+
+  <!-- Section Modification de demande -->
+  <section id="edit" class="tab-content">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Modification de demande</h1>
+      </div>
+      <div class="page-content">
+        <p>Recherchez une demande par numéro afin de modifier ses informations ou la réouvrir.</p>
+        <div class="flex-row" style="margin-bottom:1em;">
+          <input type="text" id="edit-search-id" placeholder="ID de la demande" style="flex:1; padding:0.5em; border:1px solid var(--accent-color); border-radius:4px; color:#000; background-color:var(--light-bg);" />
+          <button type="button" class="btn small" onclick="loadEditRequest()">Charger</button>
+        </div>
+        <form id="editForm" style="display:none;">
+          <div>
+            <label>Date</label>
+            <input type="date" id="edit-date" />
+          </div>
+          <div>
+            <label>Demandeur</label>
+            <input type="text" id="edit-demandeur" />
+          </div>
+          <div>
+            <label>Département concerné</label>
+            <select id="edit-department"></select>
+          </div>
+          <div>
+            <label>Zone</label>
+            <select id="edit-zone"></select>
+          </div>
+          <div>
+            <label>Corps de métier</label>
+            <select id="edit-trade"></select>
+          </div>
+          <div>
+            <label>Durée estimée (heures)</label>
+            <input type="number" id="edit-hours" min="0" step="0.1" />
+          </div>
+
+      <!-- Raison de modification (obligatoire pour enregistrer) -->
+      <div>
+        <label>Raison de modification</label>
+        <select id="edit-reason" required>
+          <option value="">Choisir...</option>
+          <option value="Correction d'information">Correction d'information</option>
+          <option value="Changement de priorité">Changement de priorité</option>
+          <option value="Ajout de détails">Ajout de détails</option>
+          <option value="Autre">Autre</option>
+        </select>
+      </div>
+          <div class="full-row">
+            <label>Équipement ou Service (description)</label>
+            <input type="text" id="edit-equipment-desc" />
+          </div>
+          <div>
+            <label>NO. Équipement</label>
+            <input type="text" id="edit-equipment-number" />
+          </div>
+          <div>
+            <label>Priorisation sommaire</label>
+            <select id="edit-priority"></select>
+          </div>
+
+          <!-- Sélection du statut de la demande -->
+          <div>
+            <label>Statut</label>
+            <select id="edit-status">
+              <option value="en-attente">En attente</option>
+              <option value="approuvee">Approuvée</option>
+              <option value="manque-info">Manque info</option>
+              <option value="en-attente-pieces">En attente pièces</option>
+              <option value="a-ceduler">À cédule</option>
+              <option value="rejete">Rejeté</option>
+              <option value="terminee">Terminée</option>
+            </select>
+          </div>
+          <div class="full-row">
+            <label>Condition spéciale</label>
+            <div class="flex-row" id="edit-special-conditions"></div>
+          </div>
+          <div class="full-row">
+            <label>Condition d'intervention</label>
+            <div class="flex-row" id="edit-intervention-conditions"></div>
+          </div>
+          <div class="full-row">
+            <label>Description (250 caractères max)</label>
+            <textarea id="edit-description" maxlength="250"></textarea>
+          </div>
+          <div class="full-row">
+            <input type="checkbox" id="edit-longDescToggle" />
+            <label for="edit-longDescToggle">Description plus longue (500 caractères)</label>
+            <textarea id="edit-description-long" maxlength="500" style="display:none;"></textarea>
+          </div>
+          <div class="full-row">
+            <label>Ajouter des images ou plans</label>
+            <!-- Fichiers multiples illimités -->
+            <input type="file" id="edit-images" accept="image/*" multiple />
+          </div>
+          <!-- Liste des pièces jointes existantes avec boutons de suppression -->
+          <div class="full-row" id="edit-current-images"></div>
+          <!-- Zone d'actions de modification -->
+          <div class="full-row btn-row">
+            <button type="button" class="btn small" onclick="saveEdit()">Enregistrer</button>
+            <button type="button" class="btn small" onclick="reopenRequest()">Réouvrir</button>
+            <button type="button" class="btn small" onclick="printRequest()">Imprimer PDF</button>
+          </div>
+        </form>
+        <p id="editMessage" style="margin-top:0.5em;"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section Planificateur -->
+  <section id="planner" class="tab-content">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Planification hebdomadaire</h1>
+      </div>
+      <div class="page-content">
+        <p>Assignez les demandes aux jours de la semaine selon la main d'œuvre disponible.</p>
+        <!-- Barre de recherche pour filtrer la planification -->
+        <div class="flex-row" style="margin:0.5em 0;">
+          <input type="text" id="planner-search" placeholder="Rechercher..."
+            style="flex:1; padding:0.5em; border:1px solid var(--accent-color); border-radius:4px; color:#000; background-color:var(--light-bg);"
+            oninput="plannerSearch = this.value.toLowerCase(); renderPlannerTable();" />
+        </div>
+        <div id="plannerTable"></div>
+        <div style="text-align:right; margin-top: 1em;">
+        <button type="button" class="btn" onclick="exportPlannerCSV()">Exporter en CSV</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section Admin -->
+  <section id="admin" class="tab-content">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Administration</h1>
+      </div>
+      <div class="page-content">
+        <p>Gestion des valeurs des menus déroulants et configuration générale du système.</p>
+        <form id="adminForm">
+      <div class="full-row">
+        <label>Départements (séparés par des virgules)</label>
+        <input type="text" id="admin-departments" />
+      </div>
+      <div class="full-row">
+        <label>Zones (séparées par des virgules)</label>
+        <input type="text" id="admin-zones" />
+      </div>
+      <div class="full-row">
+        <label>Priorités (séparées par des virgules)</label>
+        <input type="text" id="admin-priorities" />
+      </div>
+      <div class="full-row">
+        <label>Corps de métier (séparés par des virgules)</label>
+        <input type="text" id="admin-trades" />
+      </div>
+      <div class="full-row" style="text-align: right;">
+        <button type="button" class="btn" onclick="saveAdminSettings()">Enregistrer les paramètres</button>
+      </div>
+        </form>
+        <p><small>Les modifications prennent effet immédiatement et sont stockées localement.</small></p>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
+  </section>
+
+  <!-- Modale pour saisir des commentaires (manque d'information ou rejet) -->
+  <div class="modal" id="commentModal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Commentaire</h3>
+      <textarea id="modalComment" maxlength="250" style="width:100%; height:100px; margin-bottom:1em;"></textarea>
+      <div style="text-align:right;">
+        <button class="btn small" onclick="closeModal(false)">Annuler</button>
+        <button class="btn small" onclick="closeModal(true)">Valider</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale pour visualiser les détails d'une demande -->
+  <div class="modal" id="viewModal">
+    <div class="modal-content">
+      <h3>Détails de la demande</h3>
+      <div id="viewContent" style="max-height:60vh; overflow-y:auto; margin-bottom:1em;"></div>
+      <div style="text-align:right;">
+        <button class="btn small" onclick="closeViewModal()">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*
+      Fonctions utilitaires pour la gestion des données de la GMAO.  Les demandes
+      sont stockées dans localStorage sous forme de tableau d’objets.  Chaque
+      objet représente une demande avec les propriétés suivantes :
+        id, date, demandeur, department, zone, equipmentDesc, equipmentNumber,
+        priority, specialConditions (array), interventionConditions (array),
+        description, descriptionLong, images (array d’objets { name, data }),
+        status (en-attente, approuvee, manque-info, en-attente-pieces, a-ceduler,
+        rejete, terminee),
+        comments (array d’historiques) et worklogs (array).  Les paramètres
+      d’administration (listes déroulantes) sont stockés sous la clé gmaoConfig.
+    */
+
+    /** Récupère le tableau de demandes depuis localStorage. */
+    function getRequests() {
+      const data = localStorage.getItem('gmaoRequests');
+      return data ? JSON.parse(data) : [];
+    }
+    /** Sauvegarde le tableau de demandes dans localStorage. */
+    function saveRequests(requests) {
+      localStorage.setItem('gmaoRequests', JSON.stringify(requests));
+    }
+    /** Récupère la configuration (listes de départements, zones, priorités). */
+    function getConfig() {
+      const defaultConfig = {
+        departments: ['Mécanique','Électrique','Opération','Technique','Projet','Formation'],
+        zones: ['HPA 0','HPA 1','HPA 2','HYX','F10','TDE','BOILER','DOME','COURS EXT','BATIMENTS','BUREAU'],
+        priorities: ['Priorité 1 (urgent)','Priorité 2 (court terme)','Priorité 3 (à planifier)','Priorité 4 (projet)'],
+        specialConditions: ['Espace clos','Travail à chaud','Levage','Nacelle','Autres'],
+        interventionConditions: ['En arrêt','En fonction','En shutdown','Autres'],
+        trades: ['Mécanicien','Électricien','Opérateur','Technicien','Projet','Formation']
+      };
+      const data = localStorage.getItem('gmaoConfig');
+      return data ? { ...defaultConfig, ...JSON.parse(data) } : defaultConfig;
+    }
+    /** Sauvegarde la configuration dans localStorage. */
+    function saveConfig(config) {
+      localStorage.setItem('gmaoConfig', JSON.stringify(config));
+    }
+
+    /** Génère un identifiant unique basé sur la date et un compteur. */
+    function generateUniqueId() {
+      const prefix = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+      let counter = parseInt(localStorage.getItem('gmaoCounter') || '0', 10);
+      counter += 1;
+      localStorage.setItem('gmaoCounter', String(counter));
+      return `${prefix}-${counter}`;
+    }
+
+    /** Rafraîchit les menus déroulants selon la configuration. */
+    function populateDropdowns() {
+      const config = getConfig();
+      const depSelect = document.getElementById('req-department');
+      const zoneSelect = document.getElementById('req-zone');
+      const prioSelect = document.getElementById('req-priority');
+      const searchDep = document.getElementById('search-department');
+      const searchZone = document.getElementById('search-zone');
+      const searchPri = document.getElementById('search-priority');
+      const tradeSelect = document.getElementById('req-trade');
+      const searchTrade = document.getElementById('search-trade');
+      // Reset existing options
+      [depSelect, zoneSelect, prioSelect].forEach(sel => sel.innerHTML = '');
+      config.departments.forEach(dep => {
+        const opt1 = document.createElement('option'); opt1.value = dep; opt1.textContent = dep;
+        depSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = dep; opt2.textContent = dep;
+        searchDep.appendChild(opt2);
+      });
+      config.zones.forEach(zone => {
+        const opt1 = document.createElement('option'); opt1.value = zone; opt1.textContent = zone;
+        zoneSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = zone; opt2.textContent = zone;
+        searchZone.appendChild(opt2);
+      });
+      config.priorities.forEach(prio => {
+        const opt1 = document.createElement('option'); opt1.value = prio; opt1.textContent = prio;
+        prioSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = prio; opt2.textContent = prio;
+        searchPri.appendChild(opt2);
+      });
+      // Corps de métier (trades)
+      if (tradeSelect) tradeSelect.innerHTML = '';
+      if (searchTrade) searchTrade.innerHTML = '<option value="">Tous</option>';
+      config.trades && config.trades.forEach(trade => {
+        if (tradeSelect) {
+          const opt1 = document.createElement('option'); opt1.value = trade; opt1.textContent = trade;
+          tradeSelect.appendChild(opt1);
+        }
+        if (searchTrade) {
+          const opt2 = document.createElement('option'); opt2.value = trade; opt2.textContent = trade;
+          searchTrade.appendChild(opt2);
+        }
+      });
+      // Spécial & intervention conditions
+      const specialContainer = document.getElementById('special-conditions');
+      specialContainer.innerHTML = '';
+      config.specialConditions.forEach(cond => {
+        const label = document.createElement('label');
+        label.style.marginRight = '0.5em';
+        const input = document.createElement('input');
+        input.type = 'checkbox'; input.value = cond;
+        input.id = 'spec-' + cond;
+        label.appendChild(input);
+        const span = document.createElement('span');
+        span.textContent = ' ' + cond;
+        label.appendChild(span);
+        specialContainer.appendChild(label);
+      });
+      const intervContainer = document.getElementById('intervention-conditions');
+      intervContainer.innerHTML = '';
+      config.interventionConditions.forEach(cond => {
+        const label = document.createElement('label');
+        label.style.marginRight = '0.5em';
+        const input = document.createElement('input');
+        input.type = 'checkbox'; input.value = cond;
+        input.id = 'interv-' + cond;
+        label.appendChild(input);
+        const span = document.createElement('span');
+        span.textContent = ' ' + cond;
+        label.appendChild(span);
+        intervContainer.appendChild(label);
+      });
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Gestion des utilisateurs et sessions                                 */
+    /* -------------------------------------------------------------------- */
+    // Liste d'utilisateurs et de rôles. Dans une vraie application, ces
+    // informations seraient stockées sur un serveur sécurisé. Ici, elles servent
+    // uniquement à illustrer la gestion de rôles locale.
+    const users = [
+      { username: 'admin',  password: 'admin',  role: 'admin' },
+      { username: 'planif', password: 'planif', role: 'planificateur' },
+      { username: 'meca',   password: 'meca',   role: 'Mécanicien' },
+      { username: 'elec',   password: 'elec',   role: 'Électricien' },
+      { username: 'cadre',  password: 'cadre',  role: 'planificateur' }
+    ];
+
+    /** Tente de connecter l'utilisateur en vérifiant le mot de passe. */
+    function login() {
+      const username = document.getElementById('login-user').value.trim();
+      const password = document.getElementById('login-pass').value.trim();
+      const user = users.find(u => u.username === username && u.password === password);
+      const errorEl = document.getElementById('login-error');
+      if (!user) {
+        errorEl.textContent = 'Identifiants invalides.';
+        return;
+      }
+      errorEl.textContent = '';
+      localStorage.setItem('gmaoUser', JSON.stringify(user));
+      showTabsForRole(user.role);
+      document.getElementById('login-container').style.display = 'none';
+      document.querySelector('nav').style.display = 'flex';
+      document.getElementById('logout-btn').style.display = 'block';
+    }
+
+    /** Déconnecte l'utilisateur courant et réaffiche la page de connexion. */
+    function logout() {
+      localStorage.removeItem('gmaoUser');
+      // Masquer toutes les sections
+      document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+      document.querySelector('nav').style.display = 'none';
+      document.getElementById('login-container').style.display = 'block';
+    }
+
+    /** Affiche uniquement les onglets autorisés pour le rôle spécifié. */
+    function showTabsForRole(role) {
+      document.querySelectorAll('nav button[data-roles]').forEach(btn => {
+        const roles = btn.getAttribute('data-roles');
+        const allowed = roles === 'all' || roles.split(',').includes(role);
+        btn.style.display = allowed ? '' : 'none';
+      });
+      // Sélectionner l'onglet accueil par défaut
+      document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+      const homeBtn = document.getElementById('tab-home');
+      if (homeBtn && homeBtn.style.display !== 'none') {
+        homeBtn.classList.add('active');
+        showTab('home');
+      }
+    }
+
+    /** Vérifie la session au chargement et ajuste l'interface. */
+    function checkSession() {
+      const userData = localStorage.getItem('gmaoUser');
+      if (userData) {
+        const user = JSON.parse(userData);
+        showTabsForRole(user.role);
+        document.querySelector('nav').style.display = 'flex';
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('logout-btn').style.display = 'block';
+        // Afficher les notifications pour cet utilisateur
+        if (user.username) {
+          showNotifications(user.username);
+        }
+      } else {
+        document.querySelector('nav').style.display = 'none';
+        document.getElementById('login-container').style.display = 'block';
+      }
+    }
+
+    /** Met à jour les cartes KPI sur la page d’accueil. */
+    function updateKpi() {
+      const requests = getRequests();
+      const counts = {
+        total: requests.length,
+        enAttente: requests.filter(r => r.status === 'en-attente').length,
+        approuvees: requests.filter(r => r.status === 'approuvee').length,
+        manqueInfo: requests.filter(r => r.status === 'manque-info').length,
+        attentePieces: requests.filter(r => r.status === 'en-attente-pieces').length,
+        aCeduler: requests.filter(r => r.status === 'a-ceduler').length,
+        rejetees: requests.filter(r => r.status === 'rejete').length,
+        terminees: requests.filter(r => r.status === 'terminee').length
+      };
+      const kpiContainer = document.getElementById('kpiContainer');
+      kpiContainer.innerHTML = '';
+      const kpis = [
+        { title: 'Nombre total de demandes', value: counts.total },
+        { title: 'En attente', value: counts.enAttente },
+        { title: 'Approuvées', value: counts.approuvees },
+        { title: 'Manque d\'info', value: counts.manqueInfo },
+        { title: 'En attente de pièces', value: counts.attentePieces },
+        { title: 'À cédule', value: counts.aCeduler },
+        { title: 'Rejetées', value: counts.rejetees },
+        { title: 'Terminées', value: counts.terminees }
+      ];
+      kpis.forEach(k => {
+        const card = document.createElement('div');
+        card.className = 'kpi-card';
+        const h3 = document.createElement('h3'); h3.textContent = k.title;
+        const p = document.createElement('p'); p.textContent = k.value;
+        card.appendChild(h3);
+        card.appendChild(p);
+        kpiContainer.appendChild(card);
+      });
+    }
+
+    /**
+     * Ajoute une notification à destination d'un utilisateur.  Les notifications
+     * sont stockées en localStorage sous la clé "gmaoNotifications".  Chaque
+     * notification contient l'utilisateur destinataire, le texte et la date.
+     */
+    function addNotification(toUser, text) {
+      const notes = JSON.parse(localStorage.getItem('gmaoNotifications') || '[]');
+      notes.push({ toUser, text, date: new Date().toISOString() });
+      localStorage.setItem('gmaoNotifications', JSON.stringify(notes));
+    }
+
+    /**
+     * Affiche puis efface les notifications pour l'utilisateur donné.  Les
+     * notifications sont présentées via des boîtes d'alerte simples; ce
+     * comportement peut être remplacé par une modale ou un panneau de messages.
+     */
+    function showNotifications(username) {
+      let notes = JSON.parse(localStorage.getItem('gmaoNotifications') || '[]');
+      const userNotes = notes.filter(n => n.toUser === username);
+      notes = notes.filter(n => n.toUser !== username);
+      localStorage.setItem('gmaoNotifications', JSON.stringify(notes));
+      userNotes.forEach(n => {
+        alert(n.text);
+      });
+    }
+
+    /** Affiche la section de l’onglet sélectionné. */
+    function showTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(sec => sec.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+      if (tab === 'approval') renderApprovalTable();
+      if (tab === 'backlogs') performSearch();
+      if (tab === 'home') updateKpi();
+      if (tab === 'planner') renderPlannerTable();
+    }
+
+    /** Convertit des fichiers image en Base64 pour stockage. */
+    function processFiles(fileInput) {
+      return new Promise(resolve => {
+        const files = Array.from(fileInput.files).slice(0, 5);
+        const promises = files.map(file => {
+          return new Promise(res => {
+            const reader = new FileReader();
+            reader.onload = () => res({ name: file.name, data: reader.result });
+            reader.readAsDataURL(file);
+          });
+        });
+        Promise.all(promises).then(resolve);
+      });
+    }
+
+    /** Soumission du formulaire de nouvelle demande. */
+    document.getElementById('requestForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = generateUniqueId();
+      const date = document.getElementById('req-date').value;
+      const time = document.getElementById('req-time') ? document.getElementById('req-time').value : '';
+      const demandeur = document.getElementById('req-demandeur').value.trim();
+      // Le nom du demandeur est obligatoire
+      if (!demandeur) {
+        alert('Le nom du demandeur est obligatoire.');
+        return;
+      }
+      const department = document.getElementById('req-department').value;
+      const zone = document.getElementById('req-zone').value;
+      const trade = document.getElementById('req-trade').value;
+      const estimatedHours = parseFloat(document.getElementById('req-hours').value) || '';
+      const equipmentDesc = document.getElementById('req-equipment-desc').value.trim();
+      const equipmentNumber = document.getElementById('req-equipment-number').value.trim();
+      const priority = document.getElementById('req-priority').value;
+      const specialConditions = Array.from(document.querySelectorAll('#special-conditions input:checked')).map(i => i.value);
+      const interventionConditions = Array.from(document.querySelectorAll('#intervention-conditions input:checked')).map(i => i.value);
+      const description = document.getElementById('req-description').value.trim();
+      const descriptionLong = document.getElementById('longDescToggle').checked ? document.getElementById('req-description-long').value.trim() : '';
+      const images = await processFiles(document.getElementById('req-images'));
+      const requests = getRequests();
+      requests.push({
+        id,
+        date,
+        time,
+        demandeur,
+        department,
+        zone,
+        trade,
+        equipmentDesc,
+        equipmentNumber,
+        priority,
+        specialConditions,
+        interventionConditions,
+        description,
+        descriptionLong,
+        images,
+        estimatedHours,
+        status: 'en-attente',
+        comments: [],
+        worklogs: []
+      });
+      saveRequests(requests);
+      alert('Demande envoyée avec succès !');
+      e.target.reset();
+      // Réinitialiser date et heure après soumission
+      const newToday = new Date();
+      const todayStr = newToday.toISOString().split('T')[0];
+      const hours = newToday.getHours().toString().padStart(2,'0');
+      const minutes = newToday.getMinutes().toString().padStart(2,'0');
+      const dateInput = document.getElementById('req-date');
+      if (dateInput) {
+        dateInput.value = todayStr;
+        dateInput.max = todayStr;
+      }
+      const timeInput = document.getElementById('req-time');
+      if (timeInput) {
+        timeInput.value = `${hours}:${minutes}`;
+      }
+      document.getElementById('req-id').value = '';
+      document.getElementById('req-date').focus();
+      updateKpi();
+      // Proposer l'impression ou l'envoi par email
+      if (confirm('Souhaitez-vous imprimer cette demande ?')) {
+        printRequestById(id);
+      } else if (confirm('Souhaitez-vous envoyer cette demande par e-mail ?')) {
+        sendRequestByEmail(id);
+      }
+    });
+
+    /** Réagit à la case « description plus longue ». */
+    document.getElementById('longDescToggle').addEventListener('change', (e) => {
+      document.getElementById('req-description-long').style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    /** Affiche le tableau des demandes en attente d'approbation. */
+    function renderApprovalTable() {
+      const container = document.getElementById('approvalTableContainer');
+      const requests = getRequests().filter(r => r.status === 'en-attente');
+      if (requests.length === 0) {
+        container.innerHTML = '<p>Aucune demande en attente.</p>';
+        return;
+      }
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      ['NO','Date','Demandeur','Département','Zone','Priorité','Statut','Actions'].forEach(h => {
+        const th = document.createElement('th'); th.textContent = h; headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      const tbody = document.createElement('tbody');
+      requests.forEach((req, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${req.id}</td><td>${req.date}</td><td>${req.demandeur}</td><td>${req.department}</td><td>${req.zone}</td><td>${req.priority}</td>`;
+        // statut
+        const statusTd = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'status-badge status-' + req.status;
+        badge.textContent = 'En attente';
+        statusTd.appendChild(badge);
+        tr.appendChild(statusTd);
+        // actions
+        const actionsTd = document.createElement('td');
+        actionsTd.style.whiteSpace = 'nowrap';
+        const actions = [
+          { label: 'Approuver', status: 'approuvee' },
+          { label: 'Manque info', status: 'manque-info' },
+          { label: 'Attente pièces', status: 'en-attente-pieces' },
+          { label: 'À cédule', status: 'a-ceduler' },
+          { label: 'Rejeter', status: 'rejete' }
+        ];
+        // Bouton de visualisation des détails
+        const viewBtn = document.createElement('button');
+        viewBtn.textContent = 'Visualiser';
+        viewBtn.className = 'btn small';
+        viewBtn.onclick = () => viewRequest(req.id);
+        actionsTd.appendChild(viewBtn);
+        actions.forEach(action => {
+          const btn = document.createElement('button');
+          btn.textContent = action.label;
+          btn.className = 'btn small';
+          btn.onclick = () => handleAction(req.id, action.status);
+          actionsTd.appendChild(btn);
+        });
+        tr.appendChild(actionsTd);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    /** Traitement des actions dans la table d’approbation. */
+    function handleAction(id, newStatus) {
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+      if (newStatus === 'manque-info' || newStatus === 'rejete') {
+        // ouvrir modale pour message
+        modalState.requestId = id;
+        modalState.newStatus = newStatus;
+        document.getElementById('modalTitle').textContent = newStatus === 'manque-info' ? 'Message de manque d\'information' : 'Raison du rejet';
+        document.getElementById('modalComment').value = '';
+        document.getElementById('commentModal').style.display = 'flex';
+      } else {
+        req.status = newStatus;
+        req.comments.push({ date: new Date().toISOString(), status: newStatus, comment: '' });
+        saveRequests(requests);
+        renderApprovalTable();
+        updateKpi();
+      }
+    }
+    // Etat temporaire pour la modale
+    const modalState = { requestId: null, newStatus: null };
+
+    // Terme de recherche pour la planification (filtre)
+    let plannerSearch = '';
+    /** Ferme la modale.  Si confirm = true, enregistre le commentaire et change le statut. */
+    function closeModal(confirm) {
+      document.getElementById('commentModal').style.display = 'none';
+      if (confirm) {
+        const comment = document.getElementById('modalComment').value.trim();
+        const requests = getRequests();
+        const req = requests.find(r => r.id === modalState.requestId);
+        if (req) {
+          req.status = modalState.newStatus;
+          req.comments.push({ date: new Date().toISOString(), status: modalState.newStatus, comment });
+          saveRequests(requests);
+        }
+      }
+      renderApprovalTable();
+      updateKpi();
+    }
+
+    /** Ouvre une modale affichant tous les détails d'une demande. */
+    function viewRequest(id) {
+      const req = getRequests().find(r => r.id === id);
+      if (!req) return;
+      // Construire le contenu HTML
+      let html = '<table>';
+      html += '<tr><th>NO</th><td>' + req.id + '</td></tr>';
+      html += '<tr><th>Date</th><td>' + req.date + '</td></tr>';
+      html += '<tr><th>Heure</th><td>' + (req.time || '') + '</td></tr>';
+      html += '<tr><th>Demandeur</th><td>' + req.demandeur + '</td></tr>';
+      html += '<tr><th>Département</th><td>' + req.department + '</td></tr>';
+      html += '<tr><th>Zone</th><td>' + req.zone + '</td></tr>';
+      html += '<tr><th>Corps de métier</th><td>' + (req.trade || '') + '</td></tr>';
+      html += '<tr><th>Équipement/Service</th><td>' + (req.equipmentDesc || '') + '</td></tr>';
+      html += '<tr><th>NO. Équipement</th><td>' + (req.equipmentNumber || '') + '</td></tr>';
+      html += '<tr><th>Priorité</th><td>' + req.priority + '</td></tr>';
+      html += '<tr><th>Conditions spéciales</th><td>' + (req.specialConditions ? req.specialConditions.join(', ') : '') + '</td></tr>';
+      html += '<tr><th>Conditions d\'intervention</th><td>' + (req.interventionConditions ? req.interventionConditions.join(', ') : '') + '</td></tr>';
+      html += '<tr><th>Description</th><td>' + req.description + '</td></tr>';
+      if (req.descriptionLong) html += '<tr><th>Description longue</th><td>' + req.descriptionLong + '</td></tr>';
+      html += '<tr><th>Statut</th><td>' + req.status + '</td></tr>';
+      html += '</table>';
+      // Ajouter images
+      if (req.images && req.images.length) {
+        html += '<h4>Pièces jointes</h4><div>';
+        req.images.forEach(img => {
+          html += '<p><a href="' + img.data + '" target="_blank">' + img.name + '</a></p>';
+        });
+        html += '</div>';
+      }
+      // Ajouter historiques de commentaires
+      if (req.comments && req.comments.length) {
+        html += '<h4>Historique des commentaires</h4><ul>';
+        req.comments.forEach(c => {
+          html += '<li>' + new Date(c.date).toLocaleString() + ' – ' + c.status + ' – ' + (c.comment || '') + '</li>';
+        });
+        html += '</ul>';
+      }
+      document.getElementById('viewContent').innerHTML = html;
+      document.getElementById('viewModal').style.display = 'flex';
+    }
+
+    /** Ferme la modale de visualisation. */
+    function closeViewModal() {
+      document.getElementById('viewModal').style.display = 'none';
+    }
+
+    /** Recherche et filtrage dans la base de données. */
+    function performSearch() {
+      const idFilter = document.getElementById('search-id').value.trim().toLowerCase();
+      const keyword = document.getElementById('search-keyword').value.trim().toLowerCase();
+      const demandeurFilter = document.getElementById('search-demandeur').value.trim().toLowerCase();
+      const dateStart = document.getElementById('search-date-start').value;
+      const dateEnd = document.getElementById('search-date-end').value;
+      const dep = document.getElementById('search-department').value;
+      const zone = document.getElementById('search-zone').value;
+      const equipmentFilter = document.getElementById('search-equipment').value.trim().toLowerCase();
+      const priority = document.getElementById('search-priority').value;
+      const status = document.getElementById('search-status').value;
+      const tradeFilter = document.getElementById('search-trade').value;
+      const requests = getRequests().filter(r => {
+        const matchId = idFilter === '' || r.id.toLowerCase().includes(idFilter);
+        const matchKeyword = keyword === '' || Object.values(r).some(val => typeof val === 'string' && val.toLowerCase().includes(keyword));
+        const matchDemandeur = demandeurFilter === '' || (r.demandeur && r.demandeur.toLowerCase().includes(demandeurFilter));
+        const matchDateStart = dateStart === '' || (r.date && r.date >= dateStart);
+        const matchDateEnd = dateEnd === '' || (r.date && r.date <= dateEnd);
+        const matchDep = dep === '' || r.department === dep;
+        const matchZone = zone === '' || r.zone === zone;
+        const matchEquipment = equipmentFilter === '' || (r.equipmentNumber && r.equipmentNumber.toLowerCase().includes(equipmentFilter));
+        const matchPrio = priority === '' || r.priority === priority;
+        const matchStatus = status === '' || r.status === status;
+        const matchTrade = tradeFilter === '' || r.trade === tradeFilter;
+        return matchId && matchKeyword && matchDemandeur && matchDateStart && matchDateEnd && matchDep && matchZone && matchEquipment && matchPrio && matchStatus && matchTrade;
+      });
+      const container = document.getElementById('backlogsResults');
+      if (requests.length === 0) {
+        container.innerHTML = '<p>Aucun résultat.</p>';
+        return;
+      }
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      ['NO','Date','Demandeur','Département','Zone','Métier','Priorité','Heures','Statut'].forEach(h => {
+        const th = document.createElement('th'); th.textContent = h; headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      const tbody = document.createElement('tbody');
+      requests.forEach(req => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${req.id}</td><td>${req.date}</td><td>${req.demandeur || ''}</td><td>${req.department}</td><td>${req.zone}</td>`;
+        // colonne métier
+        const tdTrade = document.createElement('td');
+        tdTrade.textContent = req.trade || '';
+        tr.appendChild(tdTrade);
+        // colonne priorité
+        const tdPrio = document.createElement('td');
+        tdPrio.textContent = req.priority;
+        tr.appendChild(tdPrio);
+        // colonne heures
+        const tdHours = document.createElement('td');
+        tdHours.textContent = req.estimatedHours || '';
+        tr.appendChild(tdHours);
+        // statut
+        const statusTd = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'status-badge status-' + req.status;
+        const labelMap = {
+          'en-attente': 'En attente',
+          'approuvee': 'Approuvée',
+          'manque-info': 'Manque info',
+          'en-attente-pieces': 'Attente pièces',
+          'a-ceduler': 'À cédule',
+          'rejete': 'Rejetée',
+          'terminee': 'Terminée'
+        };
+        badge.textContent = labelMap[req.status] || req.status;
+        statusTd.appendChild(badge);
+        tr.appendChild(statusTd);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    /** Envoi du compte‑rendu de travail. */
+    document.getElementById('worklogForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('worklog-id').value.trim();
+      const status = document.getElementById('worklog-status').value;
+      const description = document.getElementById('worklog-description').value.trim();
+      const images = await processFiles(document.getElementById('worklog-images'));
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      const messageContainer = document.getElementById('worklogMessage');
+      if (!req) {
+        messageContainer.textContent = 'Demande introuvable.';
+        messageContainer.style.color = '#e74c3c';
+        return;
+      }
+      // Mettre à jour le statut en terminée sauf si autres statuts spécifiques
+      if (['annulee','reportee','manque-pieces','a-continuer','autre'].includes(status)) {
+        // On peut garder le statut original et enregistrer le compte rendu séparément
+      } else {
+        req.status = 'terminee';
+      }
+      req.worklogs.push({
+        date: new Date().toISOString(),
+        status,
+        description,
+        images
+      });
+      saveRequests(requests);
+      messageContainer.textContent = 'Compte‑rendu enregistré.';
+      messageContainer.style.color = '#27ae60';
+      e.target.reset();
+      updateKpi();
+    });
+
+    /** Sauvegarde des paramètres dans la section Admin. */
+    function saveAdminSettings() {
+      const departments = document.getElementById('admin-departments').value.split(',').map(s => s.trim()).filter(Boolean);
+      const zones = document.getElementById('admin-zones').value.split(',').map(s => s.trim()).filter(Boolean);
+      const priorities = document.getElementById('admin-priorities').value.split(',').map(s => s.trim()).filter(Boolean);
+      const trades = document.getElementById('admin-trades').value.split(',').map(s => s.trim()).filter(Boolean);
+      const config = getConfig();
+      if (departments.length) config.departments = departments;
+      if (zones.length) config.zones = zones;
+      if (priorities.length) config.priorities = priorities;
+      if (trades.length) config.trades = trades;
+      saveConfig(config);
+      populateDropdowns();
+      alert('Paramètres enregistrés.');
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Fonctions pour modification, réouverture et impression de demandes  */
+    /* -------------------------------------------------------------------- */
+
+    /** État temporaire pour la page d'édition (ID en cours). */
+    const editState = { currentId: null };
+
+    /** Charge une demande dans le formulaire de modification. */
+    function loadEditRequest() {
+      const id = document.getElementById('edit-search-id').value.trim();
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      const message = document.getElementById('editMessage');
+      if (!req) {
+        message.style.color = '#e74c3c';
+        message.textContent = 'Demande non trouvée.';
+        document.getElementById('editForm').style.display = 'none';
+        editState.currentId = null;
+        return;
+      }
+      // Remplir les champs
+      document.getElementById('edit-date').value = req.date;
+      document.getElementById('edit-demandeur').value = req.demandeur || '';
+      // Remplir les menus déroulants
+      const config = getConfig();
+      const depSelect = document.getElementById('edit-department');
+      const zoneSelect = document.getElementById('edit-zone');
+      const prioSelect = document.getElementById('edit-priority');
+      const tradeSelect = document.getElementById('edit-trade');
+      depSelect.innerHTML = '';
+      config.departments.forEach(dep => {
+        const opt = document.createElement('option'); opt.value = dep; opt.textContent = dep; depSelect.appendChild(opt);
+      });
+      zoneSelect.innerHTML = '';
+      config.zones.forEach(z => {
+        const opt = document.createElement('option'); opt.value = z; opt.textContent = z; zoneSelect.appendChild(opt);
+      });
+      prioSelect.innerHTML = '';
+      config.priorities.forEach(p => {
+        const opt = document.createElement('option'); opt.value = p; opt.textContent = p; prioSelect.appendChild(opt);
+      });
+      // trades
+      if (tradeSelect) {
+        tradeSelect.innerHTML = '';
+        config.trades.forEach(t => {
+          const opt = document.createElement('option'); opt.value = t; opt.textContent = t; tradeSelect.appendChild(opt);
+        });
+      }
+      depSelect.value = req.department;
+      zoneSelect.value = req.zone;
+      prioSelect.value = req.priority;
+      if (tradeSelect) tradeSelect.value = req.trade || '';
+      // Remplir la liste de statut
+      const statusSelect = document.getElementById('edit-status');
+      if (statusSelect) statusSelect.value = req.status || 'en-attente';
+      // Raison de modification par défaut : aucune sélection
+      const reasonSelect = document.getElementById('edit-reason');
+      if (reasonSelect) {
+        reasonSelect.value = '';
+      }
+      document.getElementById('edit-equipment-desc').value = req.equipmentDesc || '';
+      document.getElementById('edit-equipment-number').value = req.equipmentNumber || '';
+      document.getElementById('edit-hours').value = req.estimatedHours || '';
+      // Conditions spéciales et d'intervention
+      const specialContainer = document.getElementById('edit-special-conditions');
+      specialContainer.innerHTML = '';
+      config.specialConditions.forEach(cond => {
+        const label = document.createElement('label');
+        label.style.marginRight = '0.5em';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.value = cond; input.id = 'edit-spec-' + cond;
+        if (req.specialConditions && req.specialConditions.includes(cond)) input.checked = true;
+        label.appendChild(input);
+        const span = document.createElement('span'); span.textContent = ' ' + cond; label.appendChild(span);
+        specialContainer.appendChild(label);
+      });
+      const intervContainer = document.getElementById('edit-intervention-conditions');
+      intervContainer.innerHTML = '';
+      config.interventionConditions.forEach(cond => {
+        const label = document.createElement('label');
+        label.style.marginRight = '0.5em';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.value = cond; input.id = 'edit-interv-' + cond;
+        if (req.interventionConditions && req.interventionConditions.includes(cond)) input.checked = true;
+        label.appendChild(input);
+        const span = document.createElement('span'); span.textContent = ' ' + cond; label.appendChild(span);
+        intervContainer.appendChild(label);
+      });
+      document.getElementById('edit-description').value = req.description || '';
+      if (req.descriptionLong) {
+        document.getElementById('edit-longDescToggle').checked = true;
+        document.getElementById('edit-description-long').style.display = 'block';
+        document.getElementById('edit-description-long').value = req.descriptionLong;
+      } else {
+        document.getElementById('edit-longDescToggle').checked = false;
+        document.getElementById('edit-description-long').style.display = 'none';
+        document.getElementById('edit-description-long').value = '';
+      }
+      // Message et affichage du formulaire
+      message.style.color = '#27ae60';
+      message.textContent = 'Demande chargée. Modifiez les champs puis enregistrez.';
+      document.getElementById('editForm').style.display = 'grid';
+      editState.currentId = id;
+      // Afficher les pièces jointes existantes
+      renderEditAttachments(req);
+    }
+
+    /** Sauvegarde les modifications apportées à la demande en cours. */
+    function saveEdit() {
+      const id = editState.currentId;
+      if (!id) return;
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+      req.date = document.getElementById('edit-date').value;
+      req.demandeur = document.getElementById('edit-demandeur').value.trim();
+      req.department = document.getElementById('edit-department').value;
+      req.zone = document.getElementById('edit-zone').value;
+      req.trade = document.getElementById('edit-trade').value;
+      req.estimatedHours = parseFloat(document.getElementById('edit-hours').value) || '';
+      // Statut sélectionné
+      const selectedStatus = document.getElementById('edit-status').value;
+      if (selectedStatus) {
+        req.status = selectedStatus;
+      }
+      req.equipmentDesc = document.getElementById('edit-equipment-desc').value.trim();
+      req.equipmentNumber = document.getElementById('edit-equipment-number').value.trim();
+      req.priority = document.getElementById('edit-priority').value;
+      req.specialConditions = Array.from(document.querySelectorAll('#edit-special-conditions input:checked')).map(i => i.value);
+      req.interventionConditions = Array.from(document.querySelectorAll('#edit-intervention-conditions input:checked')).map(i => i.value);
+      req.description = document.getElementById('edit-description').value.trim();
+      req.descriptionLong = document.getElementById('edit-longDescToggle').checked ? document.getElementById('edit-description-long').value.trim() : '';
+      // Récupérer et valider la raison de modification
+      const reasonSelect = document.getElementById('edit-reason');
+      const reason = reasonSelect ? reasonSelect.value : '';
+      if (!reason) {
+        const msgEl = document.getElementById('editMessage');
+        msgEl.style.color = '#e74c3c';
+        msgEl.textContent = 'Veuillez sélectionner une raison pour la modification.';
+        return;
+      }
+      processFiles(document.getElementById('edit-images')).then(images => {
+        if (images.length) {
+          if (!req.images) req.images = [];
+          req.images = req.images.concat(images);
+        }
+        saveRequests(requests);
+        const msg = document.getElementById('editMessage');
+        msg.style.color = '#27ae60';
+        msg.textContent = 'Modifications enregistrées.';
+        // Ajouter un commentaire d'historique pour cette modification
+        if (!req.comments) req.comments = [];
+        req.comments.push({ date: new Date().toISOString(), status: 'modifie', comment: reason });
+        // Notifier le demandeur initial si ce n'est pas l'éditeur actuel
+        const currentUserData = localStorage.getItem('gmaoUser');
+        if (currentUserData) {
+          const currentUser = JSON.parse(currentUserData);
+          if (req.demandeur && currentUser.username !== req.demandeur) {
+            const notifText = `Votre demande #${id} a été modifiée par ${currentUser.username} le ${new Date().toLocaleString()} (raison : ${reason}).`;
+            addNotification(req.demandeur, notifText);
+          }
+        }
+        updateKpi();
+        renderApprovalTable();
+        performSearch();
+      });
+    }
+
+    /** Réouvre la demande fermée (met le statut à en-attente). */
+    function reopenRequest() {
+      const id = editState.currentId;
+      if (!id) return;
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+      req.status = 'en-attente';
+      if (!req.comments) req.comments = [];
+      req.comments.push({ date: new Date().toISOString(), status: 'reouvert', comment: 'Demande réouverte par modification' });
+      saveRequests(requests);
+      const msg = document.getElementById('editMessage');
+      msg.style.color = '#27ae60';
+      msg.textContent = 'Demande réouverte.';
+      updateKpi();
+      renderApprovalTable();
+      performSearch();
+    }
+
+    /**
+     * Affiche la liste des pièces jointes actuelles dans le formulaire de modification.
+     * Chaque élément est accompagné d'un bouton de suppression qui retire l'image de la
+     * demande et met à jour immédiatement le stockage local.
+     */
+    function renderEditAttachments(req) {
+      const container = document.getElementById('edit-current-images');
+      if (!container) return;
+      container.innerHTML = '';
+      if (!req || !req.images || req.images.length === 0) {
+        return;
+      }
+      req.images.forEach((img, index) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
+        row.style.backgroundColor = 'rgba(255,255,255,0.05)';
+        row.style.padding = '0.4em 0.6em';
+        row.style.marginBottom = '0.2em';
+        row.style.borderRadius = '4px';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = img.name;
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Supprimer';
+        delBtn.className = 'btn small';
+        delBtn.onclick = () => {
+          // Supprimer l'image et sauvegarder
+          req.images.splice(index, 1);
+          saveRequests(getRequests());
+          renderEditAttachments(req);
+        };
+        row.appendChild(nameSpan);
+        row.appendChild(delBtn);
+        container.appendChild(row);
+      });
+    }
+
+    /** Imprime un bon de travail en format PDF/print. */
+    function printRequest() {
+      const id = editState.currentId;
+      if (!id) return;
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+      const w = window.open('', '_blank');
+      w.document.write('<html><head><title>Bon de travail ' + req.id + '</title>');
+      w.document.write('<style>body{font-family:Arial,sans-serif;padding:1em;} h1{color:#0078c8;} table{width:100%;border-collapse:collapse;} td, th{border:1px solid #ccc;padding:0.4em;} .images img{max-width:100%;margin:0.5em 0;}</style>');
+      w.document.write('</head><body>');
+      w.document.write('<h1>Bon de travail #' + req.id + '</h1>');
+      w.document.write('<table>');
+      w.document.write('<tr><th>Date</th><td>' + req.date + '</td></tr>');
+      w.document.write('<tr><th>Demandeur</th><td>' + req.demandeur + '</td></tr>');
+      w.document.write('<tr><th>Département</th><td>' + req.department + '</td></tr>');
+      w.document.write('<tr><th>Zone</th><td>' + req.zone + '</td></tr>');
+      w.document.write('<tr><th>Équipement/Service</th><td>' + (req.equipmentDesc || '') + '</td></tr>');
+      w.document.write('<tr><th>NO. Équipement</th><td>' + (req.equipmentNumber || '') + '</td></tr>');
+      w.document.write('<tr><th>Priorité</th><td>' + req.priority + '</td></tr>');
+      w.document.write('<tr><th>Conditions spéciales</th><td>' + (req.specialConditions ? req.specialConditions.join(', ') : '') + '</td></tr>');
+      w.document.write('<tr><th>Conditions d\'intervention</th><td>' + (req.interventionConditions ? req.interventionConditions.join(', ') : '') + '</td></tr>');
+      w.document.write('<tr><th>Description</th><td>' + req.description + '</td></tr>');
+      if (req.descriptionLong) w.document.write('<tr><th>Description longue</th><td>' + req.descriptionLong + '</td></tr>');
+      w.document.write('</table>');
+      if (req.images && req.images.length) {
+        w.document.write('<h2>Pièces jointes</h2><div class="images">');
+        req.images.forEach(img => {
+          w.document.write('<img src="' + img.data + '" alt="' + img.name + '" />');
+        });
+        w.document.write('</div>');
+      }
+      if (req.worklogs && req.worklogs.length) {
+        w.document.write('<h2>Travaux effectués</h2>');
+        w.document.write('<table><tr><th>Date</th><th>Statut</th><th>Description</th></tr>');
+        req.worklogs.forEach(log => {
+          w.document.write('<tr><td>' + (log.date || '') + '</td><td>' + (log.status || '') + '</td><td>' + (log.description || '') + '</td></tr>');
+        });
+        w.document.write('</table>');
+      }
+      w.document.write('<h2>Commentaires / Travailleurs supplémentaires</h2>');
+      w.document.write('<p style="border:1px solid #ccc;height:80px;"></p>');
+      w.document.write('<p style="border:1px solid #ccc;height:80px;"></p>');
+      w.document.write('</body></html>');
+      w.document.close();
+      w.print();
+    }
+
+    /** Imprime une demande en spécifiant son identifiant. */
+    function printRequestById(id) {
+      const requests = getRequests();
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+      const w = window.open('', '_blank');
+      w.document.write('<html><head><title>Bon de travail ' + req.id + '</title>');
+      w.document.write('<style>body{font-family:Arial,sans-serif;padding:1em;} h1{color:#0078c8;} table{width:100%;border-collapse:collapse;} td, th{border:1px solid #ccc;padding:0.4em;} .images img{max-width:100%;margin:0.5em 0;}</style>');
+      w.document.write('</head><body>');
+      w.document.write('<h1>Bon de travail #' + req.id + '</h1>');
+      w.document.write('<table>');
+      w.document.write('<tr><th>Date</th><td>' + req.date + '</td></tr>');
+      w.document.write('<tr><th>Heure</th><td>' + (req.time || '') + '</td></tr>');
+      w.document.write('<tr><th>Demandeur</th><td>' + req.demandeur + '</td></tr>');
+      w.document.write('<tr><th>Département</th><td>' + req.department + '</td></tr>');
+      w.document.write('<tr><th>Zone</th><td>' + req.zone + '</td></tr>');
+      w.document.write('<tr><th>Équipement/Service</th><td>' + (req.equipmentDesc || '') + '</td></tr>');
+      w.document.write('<tr><th>NO. Équipement</th><td>' + (req.equipmentNumber || '') + '</td></tr>');
+      w.document.write('<tr><th>Priorité</th><td>' + req.priority + '</td></tr>');
+      w.document.write('<tr><th>Conditions spéciales</th><td>' + (req.specialConditions ? req.specialConditions.join(', ') : '') + '</td></tr>');
+      w.document.write('<tr><th>Conditions d\'intervention</th><td>' + (req.interventionConditions ? req.interventionConditions.join(', ') : '') + '</td></tr>');
+      w.document.write('<tr><th>Description</th><td>' + req.description + '</td></tr>');
+      if (req.descriptionLong) w.document.write('<tr><th>Description longue</th><td>' + req.descriptionLong + '</td></tr>');
+      w.document.write('</table>');
+      if (req.images && req.images.length) {
+        w.document.write('<h2>Pièces jointes</h2><div class="images">');
+        req.images.forEach(img => {
+          w.document.write('<img src="' + img.data + '" alt="' + img.name + '" />');
+        });
+        w.document.write('</div>');
+      }
+      w.document.write('<h2>Commentaires / Travailleurs supplémentaires</h2>');
+      w.document.write('<p style="border:1px solid #ccc;height:80px;"></p>');
+      w.document.write('<p style="border:1px solid #ccc;height:80px;"></p>');
+      w.document.write('</body></html>');
+      w.document.close();
+      w.print();
+    }
+
+    /** Prépare un e-mail contenant les détails de la demande et ouvre le client mail par défaut. */
+    function sendRequestByEmail(id) {
+      const req = getRequests().find(r => r.id === id);
+      if (!req) return;
+      const subject = encodeURIComponent('Nouvelle demande de travail #' + req.id);
+      let body = 'Voici les détails de la demande%0A';
+      body += 'ID: ' + req.id + '%0A';
+      body += 'Date: ' + req.date + '%0A';
+      body += 'Heure: ' + (req.time || '') + '%0A';
+      body += 'Demandeur: ' + req.demandeur + '%0A';
+      body += 'Département: ' + req.department + '%0A';
+      body += 'Zone: ' + req.zone + '%0A';
+      body += 'Équipement/Service: ' + (req.equipmentDesc || '') + '%0A';
+      body += 'NO. Équipement: ' + (req.equipmentNumber || '') + '%0A';
+      body += 'Priorité: ' + req.priority + '%0A';
+      body += 'Description: ' + req.description + '%0A';
+      if (req.descriptionLong) body += 'Description longue: ' + req.descriptionLong + '%0A';
+      const mailto = 'mailto:?subject=' + subject + '&body=' + body;
+      window.open(mailto, '_blank');
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Fonctions pour la planification hebdomadaire                       */
+    /* -------------------------------------------------------------------- */
+
+    /** Génère la table de planification dans l'onglet Planificateur. */
+function renderPlannerTable() {
+      const container = document.getElementById('plannerTable');
+      // Filtrer les demandes pour planification (exclure terminées et rejetées)
+      let requests = getRequests().filter(r => !['terminee','rejete'].includes(r.status));
+      // Appliquer le filtre de recherche si défini
+      if (plannerSearch) {
+        const term = plannerSearch.toLowerCase();
+        requests = requests.filter(r => {
+          return r.id.toLowerCase().includes(term) ||
+                 (r.equipmentDesc && r.equipmentDesc.toLowerCase().includes(term)) ||
+                 (r.department && r.department.toLowerCase().includes(term)) ||
+                 (r.trade && r.trade.toLowerCase().includes(term));
+        });
+      }
+      if (requests.length === 0) {
+        container.innerHTML = '<p>Aucune demande à planifier.</p>';
+        return;
+      }
+      const days = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche','Long terme'];
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      ['ID','Description','Département','Métier','Priorité','Heures prévues','Jour','Modifier'].forEach(h => {
+        const th = document.createElement('th'); th.textContent = h; headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      const tbody = document.createElement('tbody');
+      requests.forEach(req => {
+        const tr = document.createElement('tr');
+        // ID et description
+        tr.innerHTML = `<td>${req.id}</td><td>${req.equipmentDesc || ''}</td><td>${req.department}</td>`;
+        // colonne métier
+        const tdTrade = document.createElement('td');
+        tdTrade.textContent = req.trade || '';
+        tr.appendChild(tdTrade);
+        // colonne priorité
+        const tdPrio = document.createElement('td');
+        tdPrio.textContent = req.priority;
+        tr.appendChild(tdPrio);
+        // colonne heures prévues
+        const tdHours = document.createElement('td');
+        tdHours.textContent = req.estimatedHours || '';
+        tr.appendChild(tdHours);
+        // colonne jour de planification
+        const tdDay = document.createElement('td');
+        const select = document.createElement('select');
+        select.innerHTML = '<option value="">Non assigné</option>' + days.map(d => `<option value="${d}">${d}</option>`).join('');
+        select.value = req.scheduleDay || '';
+        select.onchange = () => {
+          req.scheduleDay = select.value;
+          saveRequests(getRequests());
+        };
+        tdDay.appendChild(select);
+        tr.appendChild(tdDay);
+        // colonne modifier
+        const tdEdit = document.createElement('td');
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Modifier';
+        editBtn.className = 'btn small';
+        editBtn.onclick = () => { showTab('edit'); loadEditRequest(req.id); };
+        tdEdit.appendChild(editBtn);
+        tr.appendChild(tdEdit);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    /** Exporte la planification courante au format CSV (téléchargement). */
+function exportPlannerCSV() {
+      const requests = getRequests().filter(r => r.scheduleDay);
+      if (requests.length === 0) {
+        alert('Aucune tâche planifiée.');
+        return;
+      }
+      const header = ['ID','Description','Département','Métier','Priorité','Heures prévues','Jour'];
+      const rows = requests.map(r => [r.id, r.equipmentDesc || '', r.department, r.trade || '', r.priority, r.estimatedHours || '', r.scheduleDay]);
+      let csv = header.join(',') + '\n';
+      rows.forEach(row => {
+        csv += row.map(v => '"' + (v || '').replace(/"/g,'""') + '"').join(',') + '\n';
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'planification.csv');
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    /** Initialisation de la page au chargement. */
+    window.addEventListener('DOMContentLoaded', () => {
+      // Vérifier si un utilisateur est déjà connecté et ajuster l'affichage
+      checkSession();
+      // Remplir les listes déroulantes et KPI
+      populateDropdowns();
+      updateKpi();
+      // Pré-remplir les champs admin avec la configuration actuelle
+      const config = getConfig();
+      document.getElementById('admin-departments').value = config.departments.join(', ');
+      document.getElementById('admin-zones').value = config.zones.join(', ');
+      document.getElementById('admin-priorities').value = config.priorities.join(', ');
+      document.getElementById('admin-trades').value = config.trades.join(', ');
+      // Pré-remplir la date de nouvelle demande avec la date du jour
+      const reqDate = document.getElementById('req-date');
+      if (reqDate) {
+        const today = new Date().toISOString().split('T')[0];
+        reqDate.value = today;
+        // Ne pas permettre de sélectionner une date future
+        reqDate.max = today;
+        // Générer l’ID dans le champ lecture seule lors du focus sur la date
+        reqDate.addEventListener('focus', () => {
+          document.getElementById('req-id').value = generateUniqueId();
+        }, { once: true });
+      }
+      // Limiter la date d'édition à aujourd'hui
+      const editDateInput = document.getElementById('edit-date');
+      if (editDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        editDateInput.max = today;
+      }
+      // Pré‑remplir l'heure de nouvelle demande avec l'heure actuelle
+      const reqTime = document.getElementById('req-time');
+      if (reqTime) {
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        reqTime.value = `${hours}:${minutes}`;
+      }
+      // Toggle de description longue pour le formulaire d'édition
+      const editLongToggle = document.getElementById('edit-longDescToggle');
+      if (editLongToggle) {
+        editLongToggle.addEventListener('change', (e) => {
+          const longField = document.getElementById('edit-description-long');
+          longField.style.display = e.target.checked ? 'block' : 'none';
+        });
+      }
+    });
+  </script>
+</body>
+</html>
