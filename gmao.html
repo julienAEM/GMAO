@@ -328,50 +328,49 @@
   </style>
 </head>
 <body>
-  <nav>
-    <button id="tab-home" class="active" onclick="showTab('home')">Accueil</button>
-    <button id="tab-new" onclick="showTab('new')">Nouvelle demande</button>
-    <button id="tab-approval" onclick="showTab('approval')">Demandes en approbation</button>
-    <button id="tab-edit" onclick="showTab('edit')">Modification de demande</button>
-    <button id="tab-backlogs" onclick="showTab('backlogs')">Backlogs</button>
-    <button id="tab-planner" onclick="showTab('planner')">Planificateur</button>
-    <button id="tab-worklog" onclick="showTab('worklog')">Journal de travail</button>
-    <button id="tab-admin" onclick="showTab('admin')">Admin</button>
+  <!-- Page de connexion, affichée avant que l'utilisateur ne se connecte. -->
+  <div id="login-container" style="display:none;">
+    <div class="page-wrapper">
+      <div class="page-header">
+        <h1>Connexion GMAO</h1>
+      </div>
+      <div class="page-content">
+        <form onsubmit="event.preventDefault(); login();" style="max-width:400px;margin:auto;">
+          <label>Nom d'utilisateur :</label>
+          <input type="text" id="login-user" required />
+          <label>Mot de passe :</label>
+          <input type="password" id="login-pass" required />
+          <button type="submit" class="btn" style="margin-top:1em;">Se connecter</button>
+          <p id="login-error" style="color:#e74c3c;margin-top:0.5em;"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+  <nav style="display:none;">
+    <!-- Chaque bouton possède un attribut data-roles indiquant les rôles autorisés. -->
+    <button id="tab-home" class="active" data-roles="all" onclick="showTab('home')">Accueil</button>
+    <button id="tab-new" data-roles="all" onclick="showTab('new')">Nouvelle demande</button>
+    <button id="tab-approval" data-roles="admin,planificateur" onclick="showTab('approval')">Demandes en approbation</button>
+    <button id="tab-edit" data-roles="admin,planificateur" onclick="showTab('edit')">Modification de demande</button>
+    <button id="tab-planner" data-roles="admin,planificateur" onclick="showTab('planner')">Planificateur</button>
+    <button id="tab-backlogs" data-roles="all" onclick="showTab('backlogs')">Backlogs</button>
+    <button id="tab-worklog" data-roles="all" onclick="showTab('worklog')">Journal de travail</button>
+    <button id="tab-admin" data-roles="admin" onclick="showTab('admin')">Admin</button>
+    <!-- Bouton de déconnexion, affiché uniquement lorsque l'utilisateur est connecté -->
+    <button id="logout-btn" data-roles="all" style="display:none;" onclick="logout()">Déconnexion</button>
   </nav>
 
-  <!-- Section Accueil -->
+  <!-- Section Accueil avec tableau de bord KPI -->
   <section id="home" class="tab-content active">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
-        <h1>Tableau de bord GMAO</h1>
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
+        <h1>Tableau de bord</h1>
       </div>
       <div class="page-content">
-        <div class="kpi-cards" id="kpiCards">
-          <div class="kpi-card">
-            <h3>Demandes en attente</h3>
-            <p id="kpiEnAttente">0</p>
-          </div>
-          <div class="kpi-card">
-            <h3>Demandes approuvées</h3>
-            <p id="kpiApprouve">0</p>
-          </div>
-          <div class="kpi-card">
-            <h3>Demandes en attente de pièces</h3>
-            <p id="kpiPieces">0</p>
-          </div>
-          <div class="kpi-card">
-            <h3>Demandes à cédule</h3>
-            <p id="kpiCeduler">0</p>
-          </div>
-          <div class="kpi-card">
-            <h3>Demandes complétées</h3>
-            <p id="kpiTerminee">0</p>
-          </div>
-          <div class="kpi-card">
-            <h3>Demandes rejetées</h3>
-            <p id="kpiRejete">0</p>
-          </div>
+        <p>Bienvenue dans votre système GMAO. Utilisez les onglets pour créer et suivre les demandes de maintenance. Les indicateurs ci‑dessous reflètent l'état actuel.</p>
+        <div class="kpi-cards" id="kpiContainer">
+          <!-- Les cartes KPI seront générées dynamiquement -->
         </div>
       </div>
     </div>
@@ -381,51 +380,40 @@
   <section id="new" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Nouvelle demande</h1>
       </div>
       <div class="page-content">
         <form id="request-form" onsubmit="event.preventDefault(); submitRequest();">
-          <label>ID:</label>
-          <input type="text" id="req-id" readonly />
-          <label>Date:</label>
-          <input type="date" id="req-date" required />
-          <label>Demandeur:</label>
-          <input type="text" id="req-demandeur" required />
-          <label>Département concerné:</label>
-          <select id="req-department" required></select>
-          <label>Zone:</label>
-          <select id="req-zone" required></select>
-          <label>Équipement ou Service (description):</label>
-          <input type="text" id="req-equipment-desc" />
-          <label>NO. Équipement:</label>
-          <input type="text" id="req-equipment-number" />
-          <label>Métier (corps de métier):</label>
+          <label>ID</label>
+          <input id="req-id" readonly="readonly" type="text" />
+          <label>Date</label>
+          <input id="req-date" required="required" type="date" />
+          <label>Demandeur</label>
+          <input id="req-demandeur" required="required" type="text" />
+          <label>Département concerné</label>
+          <select id="req-department" required="required"></select>
+          <label>Zone</label>
+          <select id="req-zone" required="required"></select>
+          <label>Équipement ou Service (description)</label>
+          <input id="req-equipment-desc" type="text" />
+          <label>NO. Équipement</label>
+          <input id="req-equipment-number" type="text" />
+          <label>Métier (corps de métier)</label>
           <select id="req-trade"></select>
-          <label>Heures prévues:</label>
-          <input type="number" id="req-hours" min="0" step="0.25" />
-          <label>Priorisation:</label>
-          <select id="req-priority" required></select>
-          <div id="special-conditions" class="full-row">
-            <label><input type="checkbox" value="Espace clos" /> <span>Espace clos</span></label>
-            <label><input type="checkbox" value="Travail à chaud" /> <span>Travail à chaud</span></label>
-            <label><input type="checkbox" value="Levage" /> <span>Levage</span></label>
-            <label><input type="checkbox" value="Nacelle" /> <span>Nacelle</span></label>
-            <label><input type="checkbox" value="Autres" /> <span>Autres</span></label>
-          </div>
-          <div id="intervention-conditions" class="full-row">
-            <label><input type="checkbox" value="En arrêt" /> <span>En arrêt</span></label>
-            <label><input type="checkbox" value="En fonction" /> <span>En fonction</span></label>
-            <label><input type="checkbox" value="En shutdown" /> <span>En shutdown</span></label>
-            <label><input type="checkbox" value="Autres" /> <span>Autres</span></label>
-          </div>
-          <label>Description (250 caractères max):</label>
+          <label>Heures prévues</label>
+          <input id="req-hours" min="0" step="0.25" type="number" />
+          <label>Priorisation</label>
+          <select id="req-priority" required="required"></select>
+          <div class="full-row" id="special-conditions"></div>
+          <div class="full-row" id="intervention-conditions"></div>
+          <label>Description (250 caractères max)</label>
           <textarea id="req-description" maxlength="250" rows="3"></textarea>
-          <label><input type="checkbox" id="longDescToggle" /> Description plus longue (500 caractères max)</label>
+          <label><input id="longDescToggle" type="checkbox" /> Description plus longue (500 caractères max)</label>
           <textarea id="req-description-long" maxlength="500" rows="4" style="display:none;"></textarea>
-          <label>Ajouter des images / plans (max 5):</label>
-          <input type="file" id="req-images" multiple accept="image/*" />
-          <button type="submit" class="btn full-row">Envoyer nouvelle demande en approbation</button>
+          <label>Ajouter des images / plans (max 5)</label>
+          <input accept="image/*" id="req-images" multiple="multiple" type="file" />
+          <button class="btn full-row" type="submit">Envoyer nouvelle demande en approbation</button>
         </form>
       </div>
     </div>
@@ -435,15 +423,22 @@
   <section id="approval" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Demandes en approbation</h1>
       </div>
       <div class="page-content">
         <table id="approvalTable">
           <thead>
             <tr>
-              <th>ID</th><th>Date</th><th>Demandeur</th><th>Département</th><th>Zone</th>
-              <th>Équipement</th><th>Priorité</th><th>Status</th><th>Actions</th>
+              <th>ID</th>
+              <th>Date</th>
+              <th>Demandeur</th>
+              <th>Département</th>
+              <th>Zone</th>
+              <th>Équipement</th>
+              <th>Priorité</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -481,60 +476,52 @@
   <section id="edit" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Modification de demande</h1>
       </div>
       <div class="page-content">
-        <p>
-          Entrez l'ID de la demande à modifier : 
-          <input type="text" id="edit-id-input" style="width:100px;" />
+        <p>Entrez l'ID de la demande à modifier :
+          <input id="edit-id-input" style="width:100px;" type="text" />
           <button class="btn" onclick="loadEditRequest()">Charger</button>
         </p>
         <div id="editSection" style="display:none;">
           <form id="edit-form" onsubmit="event.preventDefault(); saveEdit();">
-            <label>ID:</label>
-            <input type="text" id="edit-id" readonly />
-            <label>Date:</label>
-            <input type="date" id="edit-date" required />
-            <label>Demandeur:</label>
-            <input type="text" id="edit-demandeur" required />
-            <label>Département:</label>
-            <select id="edit-department" required></select>
-            <label>Zone:</label>
-            <select id="edit-zone" required></select>
-            <label>Métier:</label>
+            <label>ID</label>
+            <input id="edit-id" readonly="readonly" type="text" />
+            <label>Date</label>
+            <input id="edit-date" required="required" type="date" />
+            <label>Demandeur</label>
+            <input id="edit-demandeur" required="required" type="text" />
+            <label>Département</label>
+            <select id="edit-department" required="required"></select>
+            <label>Zone</label>
+            <select id="edit-zone" required="required"></select>
+            <label>Métier</label>
             <select id="edit-trade"></select>
-            <label>Heures prévues:</label>
-            <input type="number" id="edit-hours" min="0" step="0.25" />
-            <label>Équipement/Service:</label>
-            <input type="text" id="edit-equipment-desc" />
-            <label>NO. Équipement:</label>
-            <input type="text" id="edit-equipment-number" />
-            <label>Priorité:</label>
-            <select id="edit-priority" required></select>
-            <div id="edit-special-conditions" class="full-row">
-              <label><input type="checkbox" value="Espace clos" /> <span>Espace clos</span></label>
-              <label><input type="checkbox" value="Travail à chaud" /> <span>Travail à chaud</span></label>
-              <label><input type="checkbox" value="Levage" /> <span>Levage</span></label>
-              <label><input type="checkbox" value="Nacelle" /> <span>Nacelle</span></label>
-              <label><input type="checkbox" value="Autres" /> <span>Autres</span></label>
+            <label>Heures prévues</label>
+            <input id="edit-hours" min="0" step="0.25" type="number" />
+            <label>Équipement/Service</label>
+            <input id="edit-equipment-desc" type="text" />
+            <label>NO. Équipement</label>
+            <input id="edit-equipment-number" type="text" />
+            <label>Priorité</label>
+            <select id="edit-priority" required="required"></select>
+            <div class="full-row" id="edit-special-conditions">
+              <!-- options générées dynamiquement -->
             </div>
-            <div id="edit-intervention-conditions" class="full-row">
-              <label><input type="checkbox" value="En arrêt" /> <span>En arrêt</span></label>
-              <label><input type="checkbox" value="En fonction" /> <span>En fonction</span></label>
-              <label><input type="checkbox" value="En shutdown" /> <span>En shutdown</span></label>
-              <label><input type="checkbox" value="Autres" /> <span>Autres</span></label>
+            <div class="full-row" id="edit-intervention-conditions">
+              <!-- options générées dynamiquement -->
             </div>
-            <label>Description:</label>
+            <label>Description</label>
             <textarea id="edit-description" maxlength="250" rows="3"></textarea>
-            <label><input type="checkbox" id="edit-longDescToggle" /> Description plus longue</label>
+            <label><input id="edit-longDescToggle" type="checkbox" /> Description plus longue</label>
             <textarea id="edit-description-long" maxlength="500" rows="4" style="display:none;"></textarea>
-            <label>Ajouter des images:</label>
-            <input type="file" id="edit-images" multiple accept="image/*" />
-            <button type="submit" class="btn">Enregistrer les modifications</button>
-            <button type="button" class="btn" onclick="reopenRequest()">Réouvrir demande</button>
-            <button type="button" class="btn" onclick="printRequest()">Imprimer en PDF</button>
-            <div id="editMessage" class="full-row"></div>
+            <label>Ajouter des images</label>
+            <input accept="image/*" id="edit-images" multiple="multiple" type="file" />
+            <button class="btn" type="submit">Enregistrer les modifications</button>
+            <button class="btn" onclick="reopenRequest()" type="button">Réouvrir demande</button>
+            <button class="btn" onclick="printRequest()" type="button">Imprimer en PDF</button>
+            <div class="full-row" id="editMessage"></div>
           </form>
         </div>
       </div>
@@ -545,19 +532,19 @@
   <section id="backlogs" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Backlogs</h1>
       </div>
       <div class="page-content">
-        <div style="display: flex; flex-wrap: wrap; gap: 1em;">
-          <input type="text" id="search-id" placeholder="Rechercher par ID" style="flex:1;" />
-          <input type="text" id="search-keyword" placeholder="Mot-clé" style="flex:2;" />
-          <input type="text" id="search-demandeur" placeholder="Demandeur" style="flex:1;" />
+        <div style="display:flex;flex-wrap:wrap;gap:1em;">
+          <input placeholder="Rechercher par ID" id="search-id" style="flex:1;" type="text" />
+          <input placeholder="Mot-clé" id="search-keyword" style="flex:2;" type="text" />
+          <input placeholder="Demandeur" id="search-demandeur" style="flex:1;" type="text" />
           <label>Date de début
-            <input type="date" id="search-date-start" />
+            <input id="search-date-start" type="date" />
           </label>
           <label>Date de fin
-            <input type="date" id="search-date-end" />
+            <input id="search-date-end" type="date" />
           </label>
           <select id="search-department"><option value="">--Département--</option></select>
           <select id="search-zone"><option value="">--Zone--</option></select>
@@ -578,8 +565,15 @@
         <table id="databaseTable">
           <thead>
             <tr>
-              <th>ID</th><th>Date</th><th>Demandeur</th><th>Département</th><th>Zone</th>
-              <th>Équipement</th><th>Métier</th><th>Priorité</th><th>Statut</th>
+              <th>ID</th>
+              <th>Date</th>
+              <th>Demandeur</th>
+              <th>Département</th>
+              <th>Zone</th>
+              <th>Équipement</th>
+              <th>Métier</th>
+              <th>Priorité</th>
+              <th>Statut</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -592,7 +586,7 @@
   <section id="planner" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Planificateur hebdomadaire</h1>
       </div>
       <div class="page-content">
@@ -606,21 +600,20 @@
   <section id="worklog" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Journal de travail</h1>
       </div>
       <div class="page-content">
-        <p>
-          Entrez le numéro de la demande (DT) ou bon de travail (BT) :
-          <input type="text" id="worklog-id" style="width:100px;" />
+        <p>Entrez le numéro de la demande (DT) ou bon de travail (BT) :
+          <input id="worklog-id" style="width:100px;" type="text" />
           <button class="btn" onclick="loadWorklogRequest()">Charger</button>
         </p>
         <div id="worklogSection" style="display:none;">
           <form id="worklog-form" onsubmit="event.preventDefault(); submitWorklog();">
             <label>Date du travail :</label>
-            <input type="date" id="worklog-date" required />
+            <input id="worklog-date" required="required" type="date" />
             <label>Statut du travail :</label>
-            <select id="worklog-status" required>
+            <select id="worklog-status" required="required">
               <option value="terminee">Complété</option>
               <option value="annulee">Annulé</option>
               <option value="a-reporter">À reporter</option>
@@ -631,8 +624,8 @@
             <label>Description du travail effectué :</label>
             <textarea id="worklog-description" rows="4" maxlength="500"></textarea>
             <label>Ajouter des photos (facultatif) :</label>
-            <input type="file" id="worklog-images" multiple accept="image/*" />
-            <button type="submit" class="btn">Soumettre</button>
+            <input accept="image/*" id="worklog-images" multiple="multiple" type="file" />
+            <button class="btn" type="submit">Soumettre</button>
           </form>
         </div>
       </div>
@@ -643,109 +636,283 @@
   <section id="admin" class="tab-content">
     <div class="page-wrapper">
       <div class="page-header">
-        <img src="https://user-images.githubusercontent.com/placeholder/000000-0.png" alt="Logo AEM" onerror="this.style.display='none'" />
+        <img alt="Logo AEM" src="https://aemhpa.com/hs-fs/hubfs/AEM%20Logo%20(with%20name%20in%20white%20right)%201.png?width=226&height=64&name=AEM%20Logo%20(with%20name%20in%20white%20right)%201.png" />
         <h1>Administration</h1>
       </div>
       <div class="page-content">
-        <form id="admin-form" onsubmit="event.preventDefault(); saveConfig();">
+        <form id="admin-form" onsubmit="event.preventDefault(); saveAdminConfig();">
           <label>Départements (séparés par des virgules) :</label>
           <textarea id="admin-departments" rows="2"></textarea>
           <label>Zones (séparées par des virgules) :</label>
           <textarea id="admin-zones" rows="2"></textarea>
           <label>Priorités (séparées par des virgules) :</label>
-          <textarea id="admin-priorities" rows="1"></textarea>
+          <textarea id="admin-priorities" rows="2"></textarea>
           <label>Métiers (séparés par des virgules) :</label>
           <textarea id="admin-trades" rows="2"></textarea>
-          <button type="submit" class="btn full-row">Enregistrer la configuration</button>
+          <button class="btn full-row" type="submit">Enregistrer</button>
         </form>
-      </div>
-    </div>
+        <p><small>Les modifications prennent effet immédiatement et sont stockées localement.</small></p>
+      </div> <!-- .page-content -->
+    </div> <!-- .page-wrapper -->
   </section>
 
+  <!-- Modale pour saisir des commentaires (manque d'information ou rejet) -->
+  <div class="modal" id="commentModal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Commentaire</h3>
+      <textarea id="modalComment" maxlength="250" style="width:100%; height:100px; margin-bottom:1em;"></textarea>
+      <div style="text-align:right;">
+        <button class="btn small" onclick="closeModal(false)">Annuler</button>
+        <button class="btn small" onclick="closeModal(true)">Valider</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    /* -------------------------------------------------------------------- */
-    /* Fonctions utilitaires et stockage                                     */
-    /* -------------------------------------------------------------------- */
+    /*
+      Fonctions utilitaires pour la gestion des données de la GMAO.  Les demandes
+      sont stockées dans localStorage sous forme de tableau d’objets.  Chaque
+      objet représente une demande avec les propriétés suivantes :
+        id, date, demandeur, department, zone, equipmentDesc, equipmentNumber,
+        priority, specialConditions (array), interventionConditions (array),
+        description, descriptionLong, images (array d’objets { name, data }),
+        status (en-attente, approuvee, manque-info, en-attente-pieces, a-ceduler,
+        rejete, terminee),
+        comments (array d’historiques) et worklogs (array).  Les paramètres
+      d’administration (listes déroulantes) sont stockés sous la clé gmaoConfig.
+    */
 
-    /** Récupère la liste des demandes depuis le stockage. */
+    /** Récupère le tableau de demandes depuis localStorage. */
     function getRequests() {
-      return JSON.parse(localStorage.getItem('gmaoRequests') || '[]');
+      const data = localStorage.getItem('gmaoRequests');
+      return data ? JSON.parse(data) : [];
     }
-
-    /** Sauvegarde les demandes dans le stockage. */
-    function saveRequests(data) {
-      localStorage.setItem('gmaoRequests', JSON.stringify(data));
+    /** Sauvegarde le tableau de demandes dans localStorage. */
+    function saveRequests(requests) {
+      localStorage.setItem('gmaoRequests', JSON.stringify(requests));
     }
-
-    /** Récupère la configuration depuis le stockage. */
+    /** Récupère la configuration (listes de départements, zones, priorités). */
     function getConfig() {
       const defaultConfig = {
-        departments: ['mécanique','electrique','opération','technique','projet','formation'],
-        zones: [''],
-        priorities: ['Priorite 1','Priorite 2','Priorite 3','Priorite 4'],
-        trades: ['']
+        departments: ['Mécanique','Électrique','Opération','Technique','Projet','Formation'],
+        zones: ['Zone A','Zone B','Zone C','Zone D'],
+        priorities: ['Priorité 1 (urgent)','Priorité 2 (court terme)','Priorité 3 (à planifier)','Priorité 4 (projet)'],
+        specialConditions: ['Espace clos','Travail à chaud','Levage','Nacelle','Autres'],
+        interventionConditions: ['En arrêt','En fonction','En shutdown','Autres'],
+        trades: ['Mécanicien','Électricien','Opérateur','Technicien','Projet','Formation']
       };
-      return JSON.parse(localStorage.getItem('gmaoConfig') || JSON.stringify(defaultConfig));
+      const data = localStorage.getItem('gmaoConfig');
+      return data ? { ...defaultConfig, ...JSON.parse(data) } : defaultConfig;
     }
-
-    /** Sauvegarde la configuration dans le stockage. */
-    function saveConfig() {
-      const config = {
-        departments: document.getElementById('admin-departments').value.split(',').map(s => s.trim()).filter(s => s),
-        zones: document.getElementById('admin-zones').value.split(',').map(s => s.trim()).filter(s => s),
-        priorities: document.getElementById('admin-priorities').value.split(',').map(s => s.trim()).filter(s => s),
-        trades: document.getElementById('admin-trades').value.split(',').map(s => s.trim()).filter(s => s)
+    /** Sauvegarde la configuration dans localStorage. */
+    function saveAdminConfig() {
+      const cfg = {
+        departments: document.getElementById('admin-departments').value.split(',').map(s => s.trim()).filter(Boolean),
+        zones: document.getElementById('admin-zones').value.split(',').map(s => s.trim()).filter(Boolean),
+        priorities: document.getElementById('admin-priorities').value.split(',').map(s => s.trim()).filter(Boolean),
+        trades: document.getElementById('admin-trades').value.split(',').map(s => s.trim()).filter(Boolean),
+        specialConditions: getConfig().specialConditions,
+        interventionConditions: getConfig().interventionConditions
       };
-      localStorage.setItem('gmaoConfig', JSON.stringify(config));
+      localStorage.setItem('gmaoConfig', JSON.stringify(cfg));
       populateDropdowns();
       alert('Configuration enregistrée.');
     }
-
-    /** Génère un ID unique pour chaque demande (timestamp + incrément). */
+    /** Génère un identifiant unique basé sur la date et un compteur. */
     function generateUniqueId() {
-      const now = Date.now();
-      const lastId = parseInt(localStorage.getItem('gmaoLastId') || '0');
-      const newId = now > lastId ? now : lastId + 1;
-      localStorage.setItem('gmaoLastId', newId.toString());
-      return newId;
+      const prefix = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+      let counter = parseInt(localStorage.getItem('gmaoCounter') || '0', 10);
+      counter += 1;
+      localStorage.setItem('gmaoCounter', String(counter));
+      return `${prefix}-${counter}`;
     }
 
-    /** Insère les listes déroulantes en fonction de la configuration actuelle. */
+    /** Rafraîchit les menus déroulants selon la configuration. */
     function populateDropdowns() {
       const config = getConfig();
-      const deptSelects = document.querySelectorAll('#req-department, #edit-department, #search-department');
-      const zoneSelects = document.querySelectorAll('#req-zone, #edit-zone, #search-zone');
-      const prioSelects = document.querySelectorAll('#req-priority, #edit-priority, #search-priority');
-      const tradeSelects = document.querySelectorAll('#req-trade, #edit-trade, #search-trade');
-      deptSelects.forEach(sel => {
-        sel.innerHTML = '<option value="">--Choisir--</option>' + config.departments.map(d => `<option value="${d}">${d}</option>`).join('');
+      const depSelect = document.getElementById('req-department');
+      const zoneSelect = document.getElementById('req-zone');
+      const prioSelect = document.getElementById('req-priority');
+      const searchDep = document.getElementById('search-department');
+      const searchZone = document.getElementById('search-zone');
+      const searchPri = document.getElementById('search-priority');
+      const tradeSelect = document.getElementById('req-trade');
+      const searchTrade = document.getElementById('search-trade');
+      // Reset existing options
+      [depSelect, zoneSelect, prioSelect].forEach(sel => sel.innerHTML = '');
+      config.departments.forEach(dep => {
+        const opt1 = document.createElement('option'); opt1.value = dep; opt1.textContent = dep;
+        depSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = dep; opt2.textContent = dep;
+        searchDep.appendChild(opt2);
       });
-      zoneSelects.forEach(sel => {
-        sel.innerHTML = '<option value="">--Choisir--</option>' + config.zones.map(d => `<option value="${d}">${d}</option>`).join('');
+      config.zones.forEach(zone => {
+        const opt1 = document.createElement('option'); opt1.value = zone; opt1.textContent = zone;
+        zoneSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = zone; opt2.textContent = zone;
+        searchZone.appendChild(opt2);
       });
-      prioSelects.forEach(sel => {
-        sel.innerHTML = '<option value="">--Choisir--</option>' + config.priorities.map(d => `<option value="${d}">${d}</option>`).join('');
+      config.priorities.forEach(prio => {
+        const opt1 = document.createElement('option'); opt1.value = prio; opt1.textContent = prio;
+        prioSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = prio; opt2.textContent = prio;
+        searchPri.appendChild(opt2);
       });
-      tradeSelects.forEach(sel => {
-        sel.innerHTML = '<option value="">--Choisir--</option>' + config.trades.map(d => `<option value="${d}">${d}</option>`).join('');
+      // Corps de métier (trades)
+      if (tradeSelect) tradeSelect.innerHTML = '';
+      if (searchTrade) searchTrade.innerHTML = '<option value="">Tous</option>';
+      config.trades && config.trades.forEach(trade => {
+        if (tradeSelect) {
+          const opt1 = document.createElement('option'); opt1.value = trade; opt1.textContent = trade;
+          tradeSelect.appendChild(opt1);
+        }
+        if (searchTrade) {
+          const opt2 = document.createElement('option'); opt2.value = trade; opt2.textContent = trade;
+          searchTrade.appendChild(opt2);
+        }
+      });
+      // Spécial & intervention conditions
+      const specialContainer = document.getElementById('special-conditions');
+      specialContainer.innerHTML = '';
+      config.specialConditions.forEach(cond => {
+        const label = document.createElement('label');
+        label.style.marginRight = '0.5em';
+        const input = document.createElement('input');
+        input.type = 'checkbox'; input.value = cond;
+        input.id = 'spec-' + cond;
+        label.appendChild(input);
+        const span = document.createElement('span');
+        span.textContent = ' ' + cond;
+        label.appendChild(span);
+        specialContainer.appendChild(label);
+      });
+      const intervContainer = document.getElementById('intervention-conditions');
+      intervContainer.innerHTML = '';
+      config.interventionConditions.forEach(cond => {
+        const label = document.createElement('label');
+        label.style.marginRight = '0.5em';
+        const input = document.createElement('input');
+        input.type = 'checkbox'; input.value = cond;
+        input.id = 'interv-' + cond;
+        label.appendChild(input);
+        const span = document.createElement('span');
+        span.textContent = ' ' + cond;
+        label.appendChild(span);
+        intervContainer.appendChild(label);
       });
     }
 
-    /** Met à jour les KPI sur la page d'accueil. */
+    /* -------------------------------------------------------------------- */
+    /* Gestion des utilisateurs et sessions                                 */
+    /* -------------------------------------------------------------------- */
+    // Liste d'utilisateurs et de rôles. Dans une vraie application, ces
+    // informations seraient stockées sur un serveur sécurisé. Ici, elles servent
+    // uniquement à illustrer la gestion de rôles locale.
+    const users = [
+      { username: 'admin',  password: 'admin',  role: 'admin' },
+      { username: 'planif', password: 'planif', role: 'planificateur' },
+      { username: 'meca',   password: 'meca',   role: 'Mécanicien' },
+      { username: 'elec',   password: 'elec',   role: 'Électricien' },
+      { username: 'cadre',  password: 'cadre',  role: 'planificateur' }
+    ];
+
+    /** Tente de connecter l'utilisateur en vérifiant le mot de passe. */
+    function login() {
+      const username = document.getElementById('login-user').value.trim();
+      const password = document.getElementById('login-pass').value.trim();
+      const user = users.find(u => u.username === username && u.password === password);
+      const errorEl = document.getElementById('login-error');
+      if (!user) {
+        errorEl.textContent = 'Identifiants invalides.';
+        return;
+      }
+      errorEl.textContent = '';
+      localStorage.setItem('gmaoUser', JSON.stringify(user));
+      showTabsForRole(user.role);
+      document.getElementById('login-container').style.display = 'none';
+      document.querySelector('nav').style.display = 'flex';
+      document.getElementById('logout-btn').style.display = 'block';
+    }
+
+    /** Déconnecte l'utilisateur courant et réaffiche la page de connexion. */
+    function logout() {
+      localStorage.removeItem('gmaoUser');
+      // Masquer toutes les sections
+      document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+      document.querySelector('nav').style.display = 'none';
+      document.getElementById('login-container').style.display = 'block';
+    }
+
+    /** Affiche uniquement les onglets autorisés pour le rôle spécifié. */
+    function showTabsForRole(role) {
+      document.querySelectorAll('nav button[data-roles]').forEach(btn => {
+        const roles = btn.getAttribute('data-roles');
+        const allowed = roles === 'all' || roles.split(',').includes(role);
+        btn.style.display = allowed ? '' : 'none';
+      });
+      // Sélectionner l'onglet accueil par défaut
+      document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+      const homeBtn = document.getElementById('tab-home');
+      if (homeBtn && homeBtn.style.display !== 'none') {
+        homeBtn.classList.add('active');
+        showTab('home');
+      }
+    }
+
+    /** Vérifie la session au chargement et ajuste l'interface. */
+    function checkSession() {
+      const userData = localStorage.getItem('gmaoUser');
+      if (userData) {
+        const user = JSON.parse(userData);
+        showTabsForRole(user.role);
+        document.querySelector('nav').style.display = 'flex';
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('logout-btn').style.display = 'block';
+      } else {
+        document.querySelector('nav').style.display = 'none';
+        document.getElementById('login-container').style.display = 'block';
+      }
+    }
+
+    /** Met à jour les cartes KPI sur la page d’accueil. */
     function updateKpi() {
-      const reqs = getRequests();
-      const count = status => reqs.filter(r => r.status === status).length;
-      document.getElementById('kpiEnAttente').textContent = count('en-attente');
-      document.getElementById('kpiApprouve').textContent = count('approuvee');
-      document.getElementById('kpiPieces').textContent = count('en-attente-pieces');
-      document.getElementById('kpiCeduler').textContent = count('a-ceduler');
-      document.getElementById('kpiTerminee').textContent = count('terminee');
-      document.getElementById('kpiRejete').textContent = count('rejete');
+      const requests = getRequests();
+      const counts = {
+        total: requests.length,
+        enAttente: requests.filter(r => r.status === 'en-attente').length,
+        approuvees: requests.filter(r => r.status === 'approuvee').length,
+        manqueInfo: requests.filter(r => r.status === 'manque-info').length,
+        attentePieces: requests.filter(r => r.status === 'en-attente-pieces').length,
+        aCeduler: requests.filter(r => r.status === 'a-ceduler').length,
+        rejetees: requests.filter(r => r.status === 'rejete').length,
+        terminees: requests.filter(r => r.status === 'terminee').length
+      };
+      const kpiContainer = document.getElementById('kpiContainer');
+      kpiContainer.innerHTML = '';
+      const kpis = [
+        { label: 'Demandes en attente',    value: counts.enAttente },
+        { label: 'Demandes approuvées',    value: counts.approuvees },
+        { label: 'Manque d\'information', value: counts.manqueInfo },
+        { label: 'Attente de pièces',      value: counts.attentePieces },
+        { label: 'À cédule',               value: counts.aCeduler },
+        { label: 'Rejetées',               value: counts.rejetees },
+        { label: 'Terminées',              value: counts.terminees }
+      ];
+      kpis.forEach(kpi => {
+        const card = document.createElement('div');
+        card.className = 'kpi-card';
+        const h3 = document.createElement('h3'); h3.textContent = kpi.label; card.appendChild(h3);
+        const p = document.createElement('p'); p.textContent = kpi.value; card.appendChild(p);
+        kpiContainer.appendChild(card);
+      });
     }
 
-    /** Soumission d'une nouvelle demande. */
+    /* -------------------------------------------------------------------- */
+    /* Fonctions pour créer et gérer les demandes                           */
+    /* -------------------------------------------------------------------- */
+
+    /** Soumet une nouvelle demande. */
     async function submitRequest() {
-      const form = document.getElementById('request-form');
       const req = {
         id: document.getElementById('req-id').value,
         date: document.getElementById('req-date').value,
@@ -763,20 +930,19 @@
         descriptionLong: document.getElementById('longDescToggle').checked ? document.getElementById('req-description-long').value.trim() : '',
         status: 'en-attente'
       };
-      // gestion des images
       const images = await processFiles(document.getElementById('req-images'));
       req.images = images;
       const requests = getRequests();
       requests.push(req);
       saveRequests(requests);
-      form.reset();
+      document.getElementById('request-form').reset();
       document.getElementById('req-id').value = generateUniqueId();
       updateKpi();
       renderApprovalTable();
       alert('Demande soumise avec succès.');
     }
 
-    /** Lecture des fichiers images et retour sous forme d'objets { name, data } */
+    /** Transforme les fichiers images en base64. */
     function processFiles(input) {
       return new Promise(resolve => {
         const files = Array.from(input.files || []);
@@ -795,16 +961,11 @@
       });
     }
 
-    /* -------------------------------------------------------------------- */
-    /* Fonctions pour la liste des demandes et actions d'approbation          */
-    /* -------------------------------------------------------------------- */
-
-    /** Rend la liste des demandes dans la table d'approbation. */
+    /** Met à jour la table des demandes en approbation. */
     function renderApprovalTable() {
-      const tableBody = document.querySelector('#approvalTable tbody');
-      const requests = getRequests();
-      tableBody.innerHTML = '';
-      requests.filter(r => ['en-attente','approuvee','manque-info','en-attente-pieces','a-ceduler'].includes(r.status)).forEach(req => {
+      const tbody = document.querySelector('#approvalTable tbody');
+      tbody.innerHTML = '';
+      getRequests().filter(r => ['en-attente','approuvee','manque-info','en-attente-pieces','a-ceduler'].includes(r.status)).forEach(req => {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${req.id}</td><td>${req.date}</td><td>${req.demandeur}</td><td>${req.department}</td><td>${req.zone}</td><td>${req.equipmentDesc || ''}</td><td>${req.priority}</td><td>${formatStatus(req.status)}</td>`;
         const actionsTd = document.createElement('td');
@@ -816,7 +977,7 @@
         const btnInfo = document.createElement('button');
         btnInfo.className = 'btn small';
         btnInfo.textContent = 'Manque info';
-        btnInfo.onclick = () => openModal('infoModal', req.id);
+        btnInfo.onclick = () => openCommentModal(req.id, 'manque-info');
         const btnPieces = document.createElement('button');
         btnPieces.className = 'btn small';
         btnPieces.textContent = 'Attente pièces';
@@ -828,31 +989,52 @@
         const btnReject = document.createElement('button');
         btnReject.className = 'btn small';
         btnReject.textContent = 'Rejeter';
-        btnReject.onclick = () => openModal('rejectModal', req.id);
+        btnReject.onclick = () => openCommentModal(req.id, 'rejete');
         actionsTd.appendChild(btnApprove);
         actionsTd.appendChild(btnInfo);
         actionsTd.appendChild(btnPieces);
         actionsTd.appendChild(btnCeduler);
         actionsTd.appendChild(btnReject);
         tr.appendChild(actionsTd);
-        tableBody.appendChild(tr);
+        tbody.appendChild(tr);
       });
     }
 
-    /** Met à jour le statut d'une demande et rafraîchit les listes. */
-    function updateRequestStatus(id, status) {
+    /** Met à jour le statut d'une demande et ajoute un commentaire si nécessaire. */
+    function updateRequestStatus(id, status, comment) {
       const requests = getRequests();
       const req = requests.find(r => r.id === id);
       if (!req) return;
       req.status = status;
-      if (!req.comments) req.comments = [];
-      req.comments.push({ date: new Date().toISOString(), status });
+      req.comments = req.comments || [];
+      req.comments.push({ date: new Date().toISOString(), status, comment });
       saveRequests(requests);
       renderApprovalTable();
       updateKpi();
     }
 
-    /** Affiche l'intitulé human-friendly d'un statut. */
+    /** Ouvre la modale de commentaire pour manque info ou rejet. */
+    function openCommentModal(id, status) {
+      const modal = document.getElementById('commentModal');
+      modal.dataset.requestId = id;
+      modal.dataset.status = status;
+      document.getElementById('modalTitle').textContent = status === 'rejete' ? 'Raison du rejet' : 'Détails manquants';
+      document.getElementById('modalComment').value = '';
+      modal.style.display = 'flex';
+    }
+
+    /** Ferme la modale et envoie le commentaire si validated=true. */
+    function closeModal(validated) {
+      const modal = document.getElementById('commentModal');
+      modal.style.display = 'none';
+      if (!validated) return;
+      const id = modal.dataset.requestId;
+      const status = modal.dataset.status;
+      const comment = document.getElementById('modalComment').value.trim();
+      updateRequestStatus(id, status, comment);
+    }
+
+    /** Affiche un badge coloré en fonction du statut. */
     function formatStatus(status) {
       switch (status) {
         case 'en-attente': return '<span class="status-badge status-en-attente">En attente</span>';
@@ -866,61 +1048,7 @@
       }
     }
 
-    /** Ouvre une modale de message pour manque d'information ou rejet. */
-    function openModal(modalId, requestId) {
-      document.getElementById(modalId).style.display = 'flex';
-      // Stocker l'ID dans l'élément modal pour le récupérer ensuite
-      document.getElementById(modalId).dataset.requestId = requestId;
-    }
-
-    /** Ferme la modale spécifiée. */
-    function closeModal(modalId) {
-      document.getElementById(modalId).style.display = 'none';
-    }
-
-    /** Envoie une demande d'informations supplémentaires au demandeur. */
-    function sendInfoRequest() {
-      const modal = document.getElementById('infoModal');
-      const id = modal.dataset.requestId;
-      const message = document.getElementById('infoMessage').value.trim();
-      const requests = getRequests();
-      const req = requests.find(r => r.id === id);
-      if (req) {
-        req.status = 'manque-info';
-        if (!req.comments) req.comments = [];
-        req.comments.push({ date: new Date().toISOString(), status: 'manque-info', message });
-        saveRequests(requests);
-        renderApprovalTable();
-        updateKpi();
-      }
-      document.getElementById('infoMessage').value = '';
-      closeModal('infoModal');
-    }
-
-    /** Envoie un message de rejet pour la demande. */
-    function sendReject() {
-      const modal = document.getElementById('rejectModal');
-      const id = modal.dataset.requestId;
-      const message = document.getElementById('rejectMessage').value.trim();
-      const requests = getRequests();
-      const req = requests.find(r => r.id === id);
-      if (req) {
-        req.status = 'rejete';
-        if (!req.comments) req.comments = [];
-        req.comments.push({ date: new Date().toISOString(), status: 'rejete', message });
-        saveRequests(requests);
-        renderApprovalTable();
-        updateKpi();
-      }
-      document.getElementById('rejectMessage').value = '';
-      closeModal('rejectModal');
-    }
-
-    /* -------------------------------------------------------------------- */
-    /* Fonctions pour la recherche et l’affichage des backlogs               */
-    /* -------------------------------------------------------------------- */
-
-    /** Lance la recherche dans le backlogs selon les filtres. */
+    /** Recherche dans les backlogs selon les filtres. */
     function performSearch() {
       const id = document.getElementById('search-id').value.trim();
       const keyword = document.getElementById('search-keyword').value.trim().toLowerCase();
@@ -932,8 +1060,7 @@
       const trade = document.getElementById('search-trade').value;
       const priority = document.getElementById('search-priority').value;
       const status = document.getElementById('search-status').value;
-      const reqs = getRequests();
-      const results = reqs.filter(r => {
+      const results = getRequests().filter(r => {
         if (id && r.id !== id) return false;
         if (keyword && !(`${r.demandeur} ${r.equipmentDesc} ${r.equipmentNumber} ${r.description}`.toLowerCase().includes(keyword))) return false;
         if (demandeur && !r.demandeur.toLowerCase().includes(demandeur)) return false;
@@ -959,7 +1086,6 @@
     /* Fonctions pour la modification de demandes                            */
     /* -------------------------------------------------------------------- */
 
-    // Objet pour suivre l'état d'édition
     const editState = { currentId: null };
 
     /** Charge la demande à éditer selon l'ID entré. */
@@ -983,7 +1109,6 @@
       document.getElementById('edit-equipment-desc').value = req.equipmentDesc || '';
       document.getElementById('edit-equipment-number').value = req.equipmentNumber || '';
       document.getElementById('edit-priority').value = req.priority;
-      // conditions spéciales
       document.querySelectorAll('#edit-special-conditions input').forEach(chk => {
         chk.checked = req.specialConditions && req.specialConditions.includes(chk.value);
       });
@@ -1018,13 +1143,12 @@
       req.descriptionLong = document.getElementById('edit-longDescToggle').checked ? document.getElementById('edit-description-long').value.trim() : '';
       processFiles(document.getElementById('edit-images')).then(images => {
         if (images.length) {
-          if (!req.images) req.images = [];
+          req.images = req.images || [];
           req.images = req.images.concat(images);
         }
         saveRequests(requests);
-        const msg = document.getElementById('editMessage');
-        msg.style.color = '#27ae60';
-        msg.textContent = 'Modifications enregistrées.';
+        document.getElementById('editMessage').style.color = '#27ae60';
+        document.getElementById('editMessage').textContent = 'Modifications enregistrées.';
         updateKpi();
         renderApprovalTable();
         performSearch();
@@ -1039,12 +1163,11 @@
       const req = requests.find(r => r.id === id);
       if (!req) return;
       req.status = 'en-attente';
-      if (!req.comments) req.comments = [];
+      req.comments = req.comments || [];
       req.comments.push({ date: new Date().toISOString(), status: 'reouvert', comment: 'Demande réouverte par modification' });
       saveRequests(requests);
-      const msg = document.getElementById('editMessage');
-      msg.style.color = '#27ae60';
-      msg.textContent = 'Demande réouverte.';
+      document.getElementById('editMessage').style.color = '#27ae60';
+      document.getElementById('editMessage').textContent = 'Demande réouverte.';
       updateKpi();
       renderApprovalTable();
       performSearch();
@@ -1054,8 +1177,7 @@
     function printRequest() {
       const id = editState.currentId;
       if (!id) return;
-      const requests = getRequests();
-      const req = requests.find(r => r.id === id);
+      const req = getRequests().find(r => r.id === id);
       if (!req) return;
       const w = window.open('', '_blank');
       w.document.write('<html><head><title>Bon de travail ' + req.id + '</title>');
@@ -1103,7 +1225,7 @@
     /* -------------------------------------------------------------------- */
 
     /** Génère la table de planification dans l'onglet Planificateur. */
-function renderPlannerTable() {
+    function renderPlannerTable() {
       const container = document.getElementById('plannerTable');
       const requests = getRequests().filter(r => !['terminee','rejete'].includes(r.status));
       if (requests.length === 0) {
@@ -1122,15 +1244,12 @@ function renderPlannerTable() {
       requests.forEach(req => {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${req.id}</td><td>${req.equipmentDesc || ''}</td><td>${req.department}</td>`;
-        // colonne métier
         const tdTrade = document.createElement('td');
         tdTrade.textContent = req.trade || '';
         tr.appendChild(tdTrade);
-        // colonne priorité
         const tdPrio = document.createElement('td');
         tdPrio.textContent = req.priority;
         tr.appendChild(tdPrio);
-        // colonne heures prévues
         const tdHours = document.createElement('td');
         tdHours.textContent = req.estimatedHours || '';
         tr.appendChild(tdHours);
@@ -1153,7 +1272,7 @@ function renderPlannerTable() {
     }
 
     /** Exporte la planification courante au format CSV (téléchargement). */
-function exportPlannerCSV() {
+    function exportPlannerCSV() {
       const requests = getRequests().filter(r => r.scheduleDay);
       if (requests.length === 0) {
         alert('Aucune tâche planifiée.');
@@ -1176,22 +1295,72 @@ function exportPlannerCSV() {
       document.body.removeChild(link);
     }
 
+    /** Soumet un journal de travail pour une demande. */
+    async function submitWorklog() {
+      const id = document.getElementById('worklog-id').value.trim();
+      const req = getRequests().find(r => r.id === id);
+      if (!req) {
+        alert('Demande introuvable');
+        return;
+      }
+      const log = {
+        date: document.getElementById('worklog-date').value,
+        status: document.getElementById('worklog-status').value,
+        description: document.getElementById('worklog-description').value.trim()
+      };
+      const images = await processFiles(document.getElementById('worklog-images'));
+      log.images = images;
+      req.worklogs = req.worklogs || [];
+      req.worklogs.push(log);
+      saveRequests(getRequests());
+      document.getElementById('worklog-form').reset();
+      document.getElementById('worklogSection').style.display = 'none';
+      alert('Journal de travail soumis.');
+    }
+
+    /** Charge la demande pour le journal de travail. */
+    function loadWorklogRequest() {
+      const id = document.getElementById('worklog-id').value.trim();
+      const req = getRequests().find(r => r.id === id);
+      if (!req) {
+        alert('Demande introuvable');
+        return;
+      }
+      document.getElementById('worklogSection').style.display = 'block';
+    }
+
+    /** Affiche un onglet donné et masque les autres. */
+    function showTab(name) {
+      document.querySelectorAll('.tab-content').forEach(sec => sec.classList.remove('active'));
+      const section = document.getElementById(name);
+      if (section) {
+        section.classList.add('active');
+        document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.querySelector(`[id="tab-${name}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+        // Actions spécifiques aux onglets
+        if (name === 'approval') renderApprovalTable();
+        else if (name === 'backlogs') performSearch();
+        else if (name === 'planner') renderPlannerTable();
+      }
+    }
+
     /** Initialisation de la page au chargement. */
     window.addEventListener('DOMContentLoaded', () => {
+      checkSession();
       populateDropdowns();
       updateKpi();
-      // Pré-remplir les champs admin avec la configuration actuelle
-      const config = getConfig();
-      document.getElementById('admin-departments').value = config.departments.join(', ');
-      document.getElementById('admin-zones').value = config.zones.join(', ');
-      document.getElementById('admin-priorities').value = config.priorities.join(', ');
-      document.getElementById('admin-trades').value = config.trades.join(', ');
-      // Générer l’ID dans le champ lecture seule lors du focus
-      document.getElementById('req-date').addEventListener('focus', () => {
-        document.getElementById('req-id').value = generateUniqueId();
-      }, { once: true });
-
-      // Toggle de description longue pour le formulaire d'édition
+      const cfg = getConfig();
+      document.getElementById('admin-departments').value = cfg.departments.join(', ');
+      document.getElementById('admin-zones').value = cfg.zones.join(', ');
+      document.getElementById('admin-priorities').value = cfg.priorities.join(', ');
+      document.getElementById('admin-trades').value = cfg.trades.join(', ');
+      const reqDate = document.getElementById('req-date');
+      if (reqDate) {
+        reqDate.addEventListener('focus', () => {
+          document.getElementById('req-id').value = generateUniqueId();
+        }, { once: true });
+      }
       const editLongToggle = document.getElementById('edit-longDescToggle');
       if (editLongToggle) {
         editLongToggle.addEventListener('change', (e) => {
